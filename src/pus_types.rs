@@ -91,6 +91,18 @@ impl SSC {
         Self::new_from_raw(val)
     }
 
+    pub fn to_bytes(&self, arr: &mut [u8]) {
+        let b1 = ((self.ssc & 0b0011_1111_0000_0000) >> 8) as u8;
+        arr[0] = b1
+            | match self.flags {
+                SegFlags::Continuation => 0,
+                SegFlags::First => 0b0100_0000,
+                SegFlags::Last => 0b1000_0000,
+                SegFlags::Unsegmented => 0b1100_0000,
+            };
+        arr[1] = (self.ssc & 0xFF) as u8;
+    }
+
     pub fn flags(&self) -> SegFlags {
         self.flags
     }
@@ -179,7 +191,7 @@ impl PktID {
             CcsdsType::TM => 0,
         };
         let d: u8 = if self.dfh { 0b0000_1000 } else { 0 };
-        
+
         self.apid.to_bytes(arr);
         arr[0] = (self.version << 5) | t | d;
     }
