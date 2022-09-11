@@ -24,5 +24,5 @@ pub trait PUSSecHeader {
     fn from_bytes(&mut self, arr: &[u8]) -> Result<(), std::io::Error>;
 
     // Encode a secondary header to a byte slice
-    fn to_bytes(&self, arr: &mut [u8]);
+    fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error>;
 }

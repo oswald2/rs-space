@@ -6,6 +6,12 @@ pub enum TimeEncoding {
     CUC42,
 }
 
+pub const fn time_length(enc: TimeEncoding) -> usize {
+    match enc {
+        TimeEncoding::CUC42 => 6,
+    }
+}
+
 pub struct Time {
     time: Duration,
     encoding: TimeEncoding,
@@ -60,6 +66,23 @@ impl Time {
 
                 self.time = Duration::new(sec as u64, nano);
                 Ok(())
+            }
+        }
+    }
+
+    pub fn decode_from_enc(enc: TimeEncoding, arr: &[u8]) -> Result<Time, std::io::Error> {
+        match enc {
+            TimeEncoding::CUC42 => {
+                let mut rdr = Cursor::new(arr);
+                let sec = rdr.read_u32::<BigEndian>()?;
+                let subsec = rdr.read_u16::<BigEndian>()?;
+
+                let nano = (subsec as f64 * 1_000_000_000.0 / 65536.0).round() as u32;
+
+                Ok(Time {
+                    time: Duration::new(sec as u64, nano),
+                    encoding: TimeEncoding::CUC42,
+                })
             }
         }
     }

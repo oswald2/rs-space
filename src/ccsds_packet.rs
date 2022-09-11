@@ -1,5 +1,4 @@
 use crate::pus_types::{PktID, SSC};
-use crate::pus_sec_hdr::{PUSSecHeader};
 use std::io::{Read, Write};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error};
 
@@ -161,9 +160,3 @@ impl CcsdsPacket {
 
 
 
-pub struct PUSPacket {
-    pub pkt_id: PktID,
-    pub ssc: SSC,
-    pub sec_hdr: Box<dyn PUSSecHeader>,
-    pub data: Vec<u8>
-    }
