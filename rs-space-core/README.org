@@ -1,0 +1,19 @@
+
+* README rs-space
+
+This is an implementation of space related data protocols in the Rust language. Currently in a very, very early stage. This is a project for me to
+ - Learn more Rust and it's idioms
+ - Have a library for our space related programs available also in Rust (for test programs but also for operational SW)
+ - Have a replacement/second possibility for the libraries instead of the ones from AURIS when Haskell cannot be used (e.g. for performance reasons)
+
+Currently, this only handles very basic CCSDS packets, but a PUS Packet implementation has already started. The goal is to have it as efficient as possible, 
+with async capabilities as well as synchronous ones. First goal is to have normal CCSDS, C&C and EDEN protocols working, which are mainly used within
+our test systems and therefore have the priority. 
+
+Wishlist:
+ - Data pipelines handling the packets 
+ - Creation of TM and TC 
+ - Frame handling may follow 
+ - Coupling to SLE may also be interesting for some applications
+ 
+
