@@ -1,2 +1,5 @@
 /target
+**/target
 Cargo.lock
+rs-space-core/target
+cnc_receiver/target

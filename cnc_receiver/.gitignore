@@ -1,5 +1,4 @@
 /target
-rs-space-core/target
-cnc_receiver/target
+**/target
 **/Cargo.lock
 
