@@ -1,16 +1,21 @@
-use crate::pus_types::{PktID, SSC};
+use crate::pus_types::{PktID, SSC, HexBytes};
+
 use std::io::{Read, Write};
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error};
+
+use serde::{Deserialize, Serialize};
+
 
 pub enum PacketType {
     TM,
     TC,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FastCcsdsPacket {
     pub hdr: [u8; 6],
-    pub data: Vec<u8>,
+    pub data: HexBytes,
 }
 
 impl FastCcsdsPacket {
@@ -20,14 +25,14 @@ impl FastCcsdsPacket {
     pub fn new() -> FastCcsdsPacket {
         FastCcsdsPacket {
             hdr: [0; 6],
-            data: Vec::with_capacity(Self::DEFAULT_CAPACITY),
+            data: HexBytes(Vec::with_capacity(Self::DEFAULT_CAPACITY)),
         }
     }
 
     pub fn new_header_only() -> FastCcsdsPacket {
         FastCcsdsPacket {
             hdr: [0; 6],
-            data: Vec::new(),
+            data: HexBytes::new(),
         }
     }
 
@@ -45,20 +50,20 @@ impl FastCcsdsPacket {
 
     pub fn crc_value(&self) -> u16 {
         let len = self.data.len();
-        let b1 = self.data[len - 2];
-        let b2 = self.data[len - 1];
+        let b1 = self.data.0[len - 2];
+        let b2 = self.data.0[len - 1];
 
         ((b1 as u16) << 8) | (b2 as u16)
     }
 
     pub fn calc_crc(&self) -> u16 {
-        crate::crc::calc_crc2(&self.hdr, &self.data[0..(self.data.len() - 2)])
+        crate::crc::calc_crc2(&self.hdr, &self.data.0[0..(self.data.len() - 2)])
     }
 
     pub fn calc_and_append_crc(&mut self) {
-        let crc = crate::crc::calc_crc2(&self.hdr, &self.data);
-        self.data.push((crc >> 8) as u8);
-        self.data.push((crc & 0xFF) as u8);
+        let crc = crate::crc::calc_crc2(&self.hdr, &self.data.0);
+        self.data.0.push((crc >> 8) as u8);
+        self.data.0.push((crc & 0xFF) as u8);
     }
 
     pub fn check_crc(&self) -> bool {
@@ -68,16 +73,16 @@ impl FastCcsdsPacket {
 
     pub fn set_crc(&mut self) {
         let len = self.data.len();
-        let crc = crate::crc::calc_crc2(&self.hdr, &self.data[0..(len - 2)]);
-        self.data[len - 2] = (crc >> 8) as u8;
-        self.data[len - 1] = (crc & 0xFF) as u8;
+        let crc = crate::crc::calc_crc2(&self.hdr, &self.data.0[0..(len - 2)]);
+        self.data.0[len - 2] = (crc >> 8) as u8;
+        self.data.0[len - 1] = (crc & 0xFF) as u8;
     }
 
     pub fn to_ccsds_packet(mut self) -> CcsdsPacket {
         let pkt_id = PktID::new_from_bytes(&self.hdr[0..2]);
         let ssc = SSC::new_from_bytes(&self.hdr[2..4]);
 
-        self.data.truncate(self.data.len() - 2);
+        self.data.0.truncate(self.data.len() - 2);
 
         CcsdsPacket {
             pkt_id,
@@ -97,10 +102,10 @@ impl FastCcsdsPacket {
         let len = self.length();
 
         // resize the data to contain the new data
-        self.data.resize(len as usize, 0);
+        self.data.0.resize(len as usize, 0);
 
         // read in the data, returns the size of the data part or Error
-        reader.read_exact(&mut self.data).await
+        reader.read_exact(&mut self.data.0).await
     }
 
     pub fn read_from(&mut self, reader: &mut dyn Read) -> Result<(), Error> {
@@ -111,10 +116,10 @@ impl FastCcsdsPacket {
         let len = self.length();
 
         // resize the data to contain the new data
-        self.data.resize(len as usize, 0);
+        self.data.0.resize(len as usize, 0);
 
         // read in the data, returns the size of the data part or Error
-        reader.read_exact(&mut self.data)
+        reader.read_exact(&mut self.data.0)
     }
 
     pub async fn write_to_async<T: AsyncWriteExt + Unpin>(
@@ -122,19 +127,20 @@ impl FastCcsdsPacket {
         writer: &mut T,
     ) -> Result<(), Error> {
         writer.write_all(&self.hdr).await?;
-        writer.write_all(&self.data).await
+        writer.write_all(&self.data.0).await
     }
 
     pub fn write_to(&self, writer: &mut dyn Write) -> Result<(), Error> {
         writer.write_all(&self.hdr)?;
-        writer.write_all(&self.data)
+        writer.write_all(&self.data.0)
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CcsdsPacket {
     pub pkt_id: PktID,
     pub ssc: SSC,
-    pub data: Vec<u8>,
+    pub data: HexBytes,
 }
 
 impl CcsdsPacket {
@@ -147,7 +153,7 @@ impl CcsdsPacket {
         self.ssc.to_bytes(&mut pkt.hdr[2..4]);
 
         // remember, in the header, the data length - 1 is stored;
-        let enc_len = (self.data.len() - 1) as u16;
+        let enc_len = (self.data.0.len() - 1) as u16;
 
         pkt.hdr[4] = (enc_len >> 8) as u8;
         pkt.hdr[5] = (enc_len & 0xFF) as u8;

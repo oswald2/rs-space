@@ -1,12 +1,14 @@
-use crate::pus_sec_hdr_pus_c::{GalSecHdrTC, GalSecHdrTM};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+use crate::pus_sec_hdr::gal_pus_c::{GalSecHdrTC, GalSecHdrTM};
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PUSType(pub u8);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PUSSubType(pub u8);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PUSSrcID(pub u16);
 
 pub trait PUSSecHeader {
@@ -29,8 +31,9 @@ pub trait PUSSecHeader {
     fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PUSSecondaryHeader {
+    Empty,
     GALTC(GalSecHdrTC),
     GALTM(GalSecHdrTM),
 }
@@ -38,6 +41,7 @@ pub enum PUSSecondaryHeader {
 impl PUSSecHeader for PUSSecondaryHeader {
     fn pus_type(&self) -> PUSType {
         match self {
+            PUSSecondaryHeader::Empty => PUSType(0),
             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_type(),
             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_type(),
         }
@@ -45,6 +49,7 @@ impl PUSSecHeader for PUSSecondaryHeader {
 
     fn pus_sub_type(&self) -> PUSSubType {
         match self {
+            PUSSecondaryHeader::Empty => PUSSubType(0),
             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_sub_type(),
             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_sub_type(),
         }
@@ -52,6 +57,7 @@ impl PUSSecHeader for PUSSecondaryHeader {
 
     fn pus_src_id(&self) -> PUSSrcID {
         match self {
+            PUSSecondaryHeader::Empty => PUSSrcID(0),
             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_src_id(),
             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_src_id(),
         }
@@ -59,6 +65,7 @@ impl PUSSecHeader for PUSSecondaryHeader {
 
     fn len(&self) -> usize {
         match self {
+            PUSSecondaryHeader::Empty => 0,
             PUSSecondaryHeader::GALTC(hdr) => hdr.len(),
             PUSSecondaryHeader::GALTM(hdr) => hdr.len(),
         }
@@ -66,6 +73,7 @@ impl PUSSecHeader for PUSSecondaryHeader {
 
     fn from_bytes(&mut self, arr: &[u8]) -> Result<(), std::io::Error> {
         match self {
+            PUSSecondaryHeader::Empty => Ok(()),
             PUSSecondaryHeader::GALTC(hdr) => hdr.from_bytes(arr),
             PUSSecondaryHeader::GALTM(hdr) => hdr.from_bytes(arr),
         }
@@ -73,6 +81,7 @@ impl PUSSecHeader for PUSSecondaryHeader {
 
     fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error> {
         match self {
+            PUSSecondaryHeader::Empty => Ok(()),
             PUSSecondaryHeader::GALTC(hdr) => hdr.to_bytes(arr),
             PUSSecondaryHeader::GALTM(hdr) => hdr.to_bytes(arr),
         }

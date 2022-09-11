@@ -1,4 +1,8 @@
-#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct APID(u16);
 
 impl APID {
@@ -30,15 +34,16 @@ impl std::fmt::Display for APID {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SSC {
     pub flags: SegFlags,
     pub ssc: u16,
 }
 
-const SSC_MASK: u16 = 0b0011_0000_0000_0000;
+const FLAG_MASK: u16 = 0b1100_0000_0000_0000;
+const SSC_MASK: u16 = 0b0011_1111_1111_1111;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum SegFlags {
     First,
     Continuation,
@@ -73,7 +78,7 @@ impl SSC {
     }
 
     pub fn new_from_raw(val: u16) -> SSC {
-        let fl = match val & 0b1100_0000_0000_0000 {
+        let fl = match val & FLAG_MASK {
             0b0000_0000_0000_0000 => SegFlags::Continuation,
             0b0100_0000_0000_0000 => SegFlags::First,
             0b1000_0000_0000_0000 => SegFlags::Last,
@@ -118,13 +123,13 @@ impl std::fmt::Display for SSC {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CcsdsType {
     TC,
     TM,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PktID {
     pub version: u8,
     pub ccsds_type: CcsdsType,
@@ -194,5 +199,75 @@ impl PktID {
 
         self.apid.to_bytes(arr);
         arr[0] = (self.version << 5) | t | d;
+    }
+}
+
+#[derive(Clone)]
+pub struct HexBytes(pub Vec<u8>);
+
+impl HexBytes {
+    pub fn new() -> HexBytes {
+        HexBytes(Vec::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn resize(&mut self, new_len: usize, val: u8) {
+        self.0.resize(new_len, val)
+    }
+}
+
+impl fmt::Display for HexBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(&self.0))
+    }
+}
+
+impl fmt::Debug for HexBytes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HexBytes {}", hex::encode(&self.0))
+    }
+}
+
+impl Serialize for HexBytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(hex::encode(&self.0).as_str())
+    }
+}
+
+struct HexBytesVisitor;
+
+impl<'de> Visitor<'de> for HexBytesVisitor {
+    type Value = HexBytes;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a hex-byte string")
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match hex::decode(s) {
+            Ok(v) => Ok(HexBytes(v)),
+            Err(_err) => Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(s),
+                &self,
+            )),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HexBytes {
+    fn deserialize<D>(deserializer: D) -> Result<HexBytes, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(HexBytesVisitor)
     }
 }

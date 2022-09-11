@@ -1,9 +1,10 @@
 use std::io::{Error, ErrorKind};
+use serde::{Serialize, Deserialize};
 
-use crate::pus_sec_hdr::*;
+use crate::pus_sec_hdr::pus_sec_hdr::*;
 use crate::time::{time_length, Time, TimeEncoding};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GalSecHdrTC {
     pub pus_type: PUSType,
     pub pus_sub_type: PUSSubType,
@@ -16,6 +17,18 @@ pub struct GalSecHdrTC {
 
 impl GalSecHdrTC {
     const HDR_SIZE: usize = 6;
+
+    pub fn new() -> GalSecHdrTC {
+        GalSecHdrTC {
+            pus_type: PUSType(0),
+            pus_sub_type: PUSSubType(0),
+            pus_src_id: PUSSrcID(0),
+            ack_accept: false,
+            ack_start: false,
+            ack_progress: false,
+            ack_complete: false,
+        }
+    }
 }
 
 impl PUSSecHeader for GalSecHdrTC {
@@ -89,14 +102,13 @@ impl PUSSecHeader for GalSecHdrTC {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GalSecHdrTM {
     pub time_reference: u8,
     pub pus_type: PUSType,
     pub pus_sub_type: PUSSubType,
     pub pus_dest_id: PUSSrcID,
     pub msg_type_cntr: u16,
-    pub dest_id: u16,
     pub time: Time,
 }
 
