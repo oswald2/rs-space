@@ -2,6 +2,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 use std::time::{Duration, SystemTime};
 
+#[derive(Debug, Copy, Clone)]
 pub enum TimeEncoding {
     CUC42,
 }
@@ -12,6 +13,7 @@ pub const fn time_length(enc: TimeEncoding) -> usize {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Time {
     time: Duration,
     encoding: TimeEncoding,

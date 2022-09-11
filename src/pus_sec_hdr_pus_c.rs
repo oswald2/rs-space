@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind};
 use crate::pus_sec_hdr::*;
 use crate::time::{time_length, Time, TimeEncoding};
 
+#[derive(Debug, Clone)]
 pub struct GalSecHdrTC {
     pub pus_type: PUSType,
     pub pus_sub_type: PUSSubType,
@@ -88,6 +89,7 @@ impl PUSSecHeader for GalSecHdrTC {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GalSecHdrTM {
     pub time_reference: u8,
     pub pus_type: PUSType,
@@ -168,8 +170,7 @@ impl PUSSecHeader for GalSecHdrTM {
         arr[6] = (self.pus_dest_id.0 & 0xFF) as u8;
 
         const END_INDEX: usize = 7 + time_length(TimeEncoding::CUC42);
-        self.time
-            .encode(&mut arr[7..END_INDEX])?;
+        self.time.encode(&mut arr[7..END_INDEX])?;
 
         // the last byte is reserverd for Galileo
         arr[END_INDEX] = 0;

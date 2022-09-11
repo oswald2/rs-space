@@ -1,3 +1,5 @@
+use crate::pus_sec_hdr_pus_c::{GalSecHdrTC, GalSecHdrTM};
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct PUSType(pub u8);
 
@@ -25,4 +27,54 @@ pub trait PUSSecHeader {
 
     // Encode a secondary header to a byte slice
     fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error>;
+}
+
+#[derive(Debug, Clone)]
+pub enum PUSSecondaryHeader {
+    GALTC(GalSecHdrTC),
+    GALTM(GalSecHdrTM),
+}
+
+impl PUSSecHeader for PUSSecondaryHeader {
+    fn pus_type(&self) -> PUSType {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_type(),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_type(),
+        }
+    }
+
+    fn pus_sub_type(&self) -> PUSSubType {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_sub_type(),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_sub_type(),
+        }
+    }
+
+    fn pus_src_id(&self) -> PUSSrcID {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_src_id(),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_src_id(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.len(),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.len(),
+        }
+    }
+
+    fn from_bytes(&mut self, arr: &[u8]) -> Result<(), std::io::Error> {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.from_bytes(arr),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.from_bytes(arr),
+        }
+    }
+
+    fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error> {
+        match self {
+            PUSSecondaryHeader::GALTC(hdr) => hdr.to_bytes(arr),
+            PUSSecondaryHeader::GALTM(hdr) => hdr.to_bytes(arr),
+        }
+    }
 }
