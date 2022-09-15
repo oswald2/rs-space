@@ -21,7 +21,7 @@ pub fn process_fast_packet(pkt: FastCcsdsPacket) -> Result<(), Error> {
 }
 
 pub fn process_ccsds_packet(pkt: CcsdsPacket) -> Result<(), Error> {
-    let res = PUSPacket::from_ccsds_packet(pkt, PUSSecondaryHeader::GALTC(GalSecHdrTC::new()));
+    let res = PUSPacket::from_ccsds_packet(pkt, Box::new(GalSecHdrTC::new()));
     match res {
         Ok(pus_pkt) => {
             debug!("PUS Packet: {:?}", pus_pkt);

@@ -31,59 +31,69 @@ pub trait PUSSecHeader {
     fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PUSSecondaryHeader {
-    Empty,
-    GALTC(GalSecHdrTC),
-    GALTM(GalSecHdrTM),
-}
 
-impl PUSSecHeader for PUSSecondaryHeader {
-    fn pus_type(&self) -> PUSType {
-        match self {
-            PUSSecondaryHeader::Empty => PUSType(0),
-            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_type(),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_type(),
-        }
-    }
+// impl std::fmt::Debug for dyn PUSSecHeader + '_ {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         self.fmt(f)
+//     }
+// }
 
-    fn pus_sub_type(&self) -> PUSSubType {
-        match self {
-            PUSSecondaryHeader::Empty => PUSSubType(0),
-            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_sub_type(),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_sub_type(),
-        }
-    }
 
-    fn pus_src_id(&self) -> PUSSrcID {
-        match self {
-            PUSSecondaryHeader::Empty => PUSSrcID(0),
-            PUSSecondaryHeader::GALTC(hdr) => hdr.pus_src_id(),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.pus_src_id(),
-        }
-    }
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub enum PUSSecondaryHeader {
+//     Empty,
+//     GALTC(GalSecHdrTC),
+//     GALTM(GalSecHdrTM),
+// }
 
-    fn len(&self) -> usize {
-        match self {
-            PUSSecondaryHeader::Empty => 0,
-            PUSSecondaryHeader::GALTC(hdr) => hdr.len(),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.len(),
-        }
-    }
+// impl PUSSecHeader for PUSSecondaryHeader {
+//     type SecHeader = PUSSecondaryHeader;    
 
-    fn from_bytes(&mut self, arr: &[u8]) -> Result<(), std::io::Error> {
-        match self {
-            PUSSecondaryHeader::Empty => Ok(()),
-            PUSSecondaryHeader::GALTC(hdr) => hdr.from_bytes(arr),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.from_bytes(arr),
-        }
-    }
+//     fn pus_type(&self) -> PUSType {
+//         match self {
+//             PUSSecondaryHeader::Empty => PUSType(0),
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_type(),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_type(),
+//         }
+//     }
 
-    fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error> {
-        match self {
-            PUSSecondaryHeader::Empty => Ok(()),
-            PUSSecondaryHeader::GALTC(hdr) => hdr.to_bytes(arr),
-            PUSSecondaryHeader::GALTM(hdr) => hdr.to_bytes(arr),
-        }
-    }
-}
+//     fn pus_sub_type(&self) -> PUSSubType {
+//         match self {
+//             PUSSecondaryHeader::Empty => PUSSubType(0),
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_sub_type(),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_sub_type(),
+//         }
+//     }
+
+//     fn pus_src_id(&self) -> PUSSrcID {
+//         match self {
+//             PUSSecondaryHeader::Empty => PUSSrcID(0),
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.pus_src_id(),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.pus_src_id(),
+//         }
+//     }
+
+//     fn len(&self) -> usize {
+//         match self {
+//             PUSSecondaryHeader::Empty => 0,
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.len(),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.len(),
+//         }
+//     }
+
+//     fn from_bytes(&mut self, arr: &[u8]) -> Result<(), std::io::Error> {
+//         match self {
+//             PUSSecondaryHeader::Empty => Ok(()),
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.from_bytes(arr),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.from_bytes(arr),
+//         }
+//     }
+
+//     fn to_bytes(&self, arr: &mut [u8]) -> Result<(), std::io::Error> {
+//         match self {
+//             PUSSecondaryHeader::Empty => Ok(()),
+//             PUSSecondaryHeader::GALTC(hdr) => hdr.to_bytes(arr),
+//             PUSSecondaryHeader::GALTM(hdr) => hdr.to_bytes(arr),
+//         }
+//     }
+// }

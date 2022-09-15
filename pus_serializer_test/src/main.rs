@@ -7,7 +7,7 @@ use rs_space_core::time::{Time, TimeEncoding};
 fn main() {
     let t = Time::now(TimeEncoding::CUC42);
 
-    let sec_hdr = PUSSecondaryHeader::GALTM(GalSecHdrTM {
+    let sec_hdr = Box::new(GalSecHdrTM {
         time_reference: 0,
         pus_type: PUSType(3),
         pus_sub_type: PUSSubType(25),

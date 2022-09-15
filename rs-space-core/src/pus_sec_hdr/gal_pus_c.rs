@@ -32,6 +32,7 @@ impl GalSecHdrTC {
 }
 
 impl PUSSecHeader for GalSecHdrTC {
+
     // return the PUS Type of the secondary header
     fn pus_type(&self) -> PUSType {
         self.pus_type
@@ -117,6 +118,7 @@ impl GalSecHdrTM {
 }
 
 impl PUSSecHeader for GalSecHdrTM {
+
     // return the PUS Type of the secondary header
     fn pus_type(&self) -> PUSType {
         self.pus_type
