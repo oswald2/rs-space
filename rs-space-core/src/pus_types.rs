@@ -217,6 +217,10 @@ impl HexBytes {
     pub fn resize(&mut self, new_len: usize, val: u8) {
         self.0.resize(new_len, val)
     }
+
+    pub fn data(&self) -> &[u8] {
+        &self.0[0..]
+    }
 }
 
 impl fmt::Display for HexBytes {

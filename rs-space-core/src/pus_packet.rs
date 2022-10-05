@@ -15,6 +15,7 @@ pub struct PUSPacket {
 }
 
 impl PUSPacket {
+    /// Create a new PUSPacket with the given type and secondary header template
     pub fn new(typ: CcsdsType, pus_sec_hdr: PUSSecondaryHeader) -> PUSPacket {
         PUSPacket {
             pkt_id: PktID::new(0, typ, false, APID::new(0)),
@@ -24,6 +25,8 @@ impl PUSPacket {
         }
     }
 
+    /// Create a new PUSPacket from a CcsdsPacket. A template for a secondary 
+    /// header has to be provided. The CcsdsPacket is consumed.
     pub fn from_ccsds_packet(
         pkt: CcsdsPacket,
         mut pus_sec_hdr: PUSSecondaryHeader,
@@ -46,5 +49,15 @@ impl PUSPacket {
                 data: pkt.data,
             })
         }
+    }
+
+    /// Return the data part of the PUSPacket readonly as a slice of u8's.
+    pub fn data(&self) -> &[u8] {
+        self.data.data()
+    }
+
+    /// Set the complete data part of a PUSPacket from a vector
+    pub fn set_data(&mut self, dat: Vec<u8>) {
+        self.data = HexBytes(dat);
     }
 }

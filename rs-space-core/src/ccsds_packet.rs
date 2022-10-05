@@ -1,11 +1,10 @@
-use crate::pus_types::{PktID, SSC, HexBytes};
+use crate::pus_types::{HexBytes, PktID, SSC};
 
 use std::io::{Read, Write};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error};
 
 use serde::{Deserialize, Serialize};
-
 
 pub enum PacketType {
     TM,
@@ -78,19 +77,6 @@ impl FastCcsdsPacket {
         self.data.0[len - 1] = (crc & 0xFF) as u8;
     }
 
-    pub fn to_ccsds_packet(mut self) -> CcsdsPacket {
-        let pkt_id = PktID::new_from_bytes(&self.hdr[0..2]);
-        let ssc = SSC::new_from_bytes(&self.hdr[2..4]);
-
-        self.data.0.truncate(self.data.len() - 2);
-
-        CcsdsPacket {
-            pkt_id,
-            ssc,
-            data: self.data,
-        }
-    }
-
     pub async fn read_from_async<T: AsyncReadExt + Unpin>(
         &mut self,
         reader: &mut T,
@@ -144,6 +130,20 @@ pub struct CcsdsPacket {
 }
 
 impl CcsdsPacket {
+    pub fn from_fast_ccsds_pkt(mut pkt: FastCcsdsPacket) -> CcsdsPacket {
+        let pkt_id = PktID::new_from_bytes(&pkt.hdr[0..2]);
+        let ssc = SSC::new_from_bytes(&pkt.hdr[2..4]);
+
+        // store data without the CRC, so remove the last 2 bytes
+        pkt.data.0.truncate(pkt.data.0.len() - 2);
+
+        CcsdsPacket {
+            pkt_id,
+            ssc,
+            data: pkt.data,
+        }
+    }
+
     pub fn to_fast_ccsds_pkt(self) -> FastCcsdsPacket {
         let mut pkt = FastCcsdsPacket::new_header_only();
 
@@ -164,6 +164,3 @@ impl CcsdsPacket {
         pkt
     }
 }
-
-
-

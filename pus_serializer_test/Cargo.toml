@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rs-space-core = { path = "../rs-space-core" }
 serde_json = "1"
+serde_yaml = "0.9.13"
