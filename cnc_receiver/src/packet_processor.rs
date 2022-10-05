@@ -10,7 +10,7 @@ use rs_space_core::pus_sec_hdr::pus_sec_hdr::*;
 pub fn process_fast_packet(pkt: FastCcsdsPacket) -> Result<(), Error> {
     debug!("Received: {:?}", pkt);
     if pkt.check_crc() {
-        let ccsds_pkt = pkt.to_ccsds_packet();
+        let ccsds_pkt = CcsdsPacket::from_fast_ccsds_pkt(pkt);
 
         debug!("CcsdsPacket: {:?}", ccsds_pkt);
 

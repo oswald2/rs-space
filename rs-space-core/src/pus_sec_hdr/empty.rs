@@ -1,7 +1,6 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::pus_sec_hdr::pus_sec_hdr::*;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PUSEmptyHeader;
@@ -36,4 +35,10 @@ impl PUSSecHeader for PUSEmptyHeader {
     fn to_bytes(&self, _arr: &mut [u8]) -> Result<(), std::io::Error> {
         Ok(())
     }
+
+    fn set_pus_type(&mut self, _typ: PUSType) {}
+
+    fn set_pus_sub_type(&mut self, _typ: PUSSubType) {}
+
+    fn set_src_id(&mut self, _src_id: PUSSrcID) {}
 }

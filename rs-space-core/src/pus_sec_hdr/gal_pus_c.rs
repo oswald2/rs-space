@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
-use serde::{Serialize, Deserialize};
 
 use crate::pus_sec_hdr::pus_sec_hdr::*;
 use crate::time::{time_length, Time, TimeEncoding};
@@ -100,6 +100,18 @@ impl PUSSecHeader for GalSecHdrTC {
 
         Ok(())
     }
+
+    fn set_pus_type(&mut self, typ: PUSType) {
+        self.pus_type = typ;
+    }
+
+    fn set_pus_sub_type(&mut self, typ: PUSSubType) {
+        self.pus_sub_type = typ;
+    }
+
+    fn set_src_id(&mut self, src_id: PUSSrcID) {
+        self.pus_src_id = src_id;
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,5 +199,17 @@ impl PUSSecHeader for GalSecHdrTM {
         // the last byte is reserverd for Galileo
         arr[END_INDEX] = 0;
         Ok(())
+    }
+
+    fn set_pus_type(&mut self, typ: PUSType) {
+        self.pus_type = typ;
+    }
+
+    fn set_pus_sub_type(&mut self, typ: PUSSubType) {
+        self.pus_sub_type = typ;
+    }
+
+    fn set_src_id(&mut self, src_id: PUSSrcID) {
+        self.pus_dest_id = src_id;
     }
 }
