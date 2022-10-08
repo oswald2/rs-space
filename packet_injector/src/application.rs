@@ -30,7 +30,7 @@ pub async fn run_app(script_file: &Path, address: String) -> Result<(), Error> {
 
     let actions: EDSL = serde_json::from_str(&content)?;
 
-    edsl_processor(&tx, actions).await
+    edsl_processor(&tx, &actions).await
 }
 
 
@@ -55,7 +55,7 @@ async fn send_thread(address: String, mut chan: mpsc::Receiver<FastCcsdsPacket>)
 }
 
 
-async fn edsl_processor(tx: &mpsc::Sender<FastCcsdsPacket>, edsl: EDSL) -> Result<(), Error> {
+async fn edsl_processor(tx: &mpsc::Sender<FastCcsdsPacket>, edsl: &EDSL) -> Result<(), Error> {
     for action in &edsl.actions {
         action_processor(tx, action).await?
     }
@@ -79,7 +79,7 @@ async fn action_processor(tx: &mpsc::Sender<FastCcsdsPacket>, actions: &Action) 
         },
         RepeatN(n, actions) => {
             for _ in [0..*n] {
-                action_processor(tx, actions).await?
+                edsl_processor(tx, actions).await?
             }
         }
         Log(str) => {

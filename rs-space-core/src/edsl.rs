@@ -5,7 +5,7 @@ use crate::pus_packet::PUSPacket;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Action {
     SendPkt(PUSPacket),
-    RepeatN(u32, Box<Action>),
+    RepeatN(u32, Box<EDSL>),
     Log(String)
 }
 
