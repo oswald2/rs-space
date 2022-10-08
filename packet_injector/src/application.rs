@@ -8,12 +8,12 @@ use tokio::net::TcpStream;
 
 use tokio::sync::mpsc;
 
-use log::{error};
+use log::{info, error};
 
 use async_recursion::async_recursion;
 
 use rs_space_core::edsl::{EDSL, Action};
-use rs_space_core::edsl::Action::{SendPkt, RepeatN};
+use rs_space_core::edsl::Action::{SendPkt, RepeatN, Log};
 use rs_space_core::ccsds_packet::{FastCcsdsPacket};
 
 
@@ -81,6 +81,9 @@ async fn action_processor(tx: &mpsc::Sender<FastCcsdsPacket>, actions: &Action) 
             for _ in [0..*n] {
                 action_processor(tx, actions).await?
             }
+        }
+        Log(str) => {
+            info!("{}", str);
         }
     }
     
