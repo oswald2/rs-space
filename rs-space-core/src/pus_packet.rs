@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ccsds_packet::CcsdsPacket;
 use crate::pus_sec_hdr::pus_sec_hdr::*;
-use crate::pus_types::{CcsdsType, PktID, APID, SSC, HexBytes};
+use crate::pus_types::{CcsdsType, HexBytes, PktID, APID, SSC};
 
 use std::io::Error;
 
@@ -25,7 +25,7 @@ impl PUSPacket {
         }
     }
 
-    /// Create a new PUSPacket from a CcsdsPacket. A template for a secondary 
+    /// Create a new PUSPacket from a CcsdsPacket. A template for a secondary
     /// header has to be provided. The CcsdsPacket is consumed.
     pub fn from_ccsds_packet(
         pkt: CcsdsPacket,
@@ -49,6 +49,22 @@ impl PUSPacket {
                 data: pkt.data,
             })
         }
+    }
+
+    pub fn to_ccsds_packet(&self) -> Result<CcsdsPacket, std::io::Error> {
+        let sec_hdr_len = self.sec_hdr.len();
+        let mut content: Vec<u8> = Vec::new();
+
+        content.resize(sec_hdr_len, 0);
+
+        self.sec_hdr.to_bytes(&mut content)?;
+        content.extend(&self.data.0);
+
+        Ok(CcsdsPacket {
+            pkt_id: self.pkt_id.clone(),
+            ssc: self.ssc,
+            data: HexBytes(content),
+        })
     }
 
     /// Return the data part of the PUSPacket readonly as a slice of u8's.
