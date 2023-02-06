@@ -1,6 +1,6 @@
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt};
 
-use std::io::{Cursor, Write, Read};
+use std::io::{Cursor, Write};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
 
@@ -8,9 +8,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum TMLMessageType {
-    TMLSlePduMessage = 1,
-    TMLContextMessage = 2,
-    TMLHeartBeat = 3,
+    SlePduMessage = 1,
+    ContextMessage = 2,
+    HeartBeat = 3,
 }
 
 impl TryFrom<u8> for TMLMessageType {
@@ -18,9 +18,9 @@ impl TryFrom<u8> for TMLMessageType {
 
     fn try_from(tp: u8) -> Result<Self, Self::Error> {
         match tp {
-            1 => Ok(TMLMessageType::TMLSlePduMessage),
-            2 => Ok(TMLMessageType::TMLContextMessage),
-            3 => Ok(TMLMessageType::TMLHeartBeat),
+            1 => Ok(TMLMessageType::SlePduMessage),
+            2 => Ok(TMLMessageType::ContextMessage),
+            3 => Ok(TMLMessageType::HeartBeat),
             _ => Err(()) 
         }
     }
@@ -31,9 +31,9 @@ impl TryFrom<u8> for TMLMessageType {
 
 #[derive(Debug)]
 pub struct TMLMessage {
-    msg_type: TMLMessageType,
-    length: u32,
-    data: Vec<u8>,
+    pub msg_type: TMLMessageType,
+    pub length: u32,
+    pub data: Vec<u8>,
 }
 
 impl TMLMessage {
@@ -56,7 +56,7 @@ impl TMLMessage {
     }
 
     pub fn heartbeat_message() -> TMLMessage {
-        TMLMessage::new(TMLMessageType::TMLHeartBeat)
+        TMLMessage::new(TMLMessageType::HeartBeat)
     }
 
     pub fn context_message(interval: u16, dead_factor: u16) -> TMLMessage {
@@ -72,7 +72,7 @@ impl TMLMessage {
         WriteBytesExt::write_u16::<BigEndian>(&mut wrtr, dead_factor).unwrap();
 
         TMLMessage {
-            msg_type: TMLMessageType::TMLHeartBeat,
+            msg_type: TMLMessageType::ContextMessage,
             length: 12,
             data: data,
         }

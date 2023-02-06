@@ -120,7 +120,9 @@ impl FastCcsdsPacket {
 
     pub fn write_to(&self, writer: &mut dyn Write) -> Result<(), Error> {
         writer.write_all(&self.hdr)?;
-        writer.write_all(&self.data.0)
+        writer.write_all(&self.data.0)?;
+        writer.flush()?;
+        Ok(())
     }
 }
 
