@@ -6,11 +6,13 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum TimeEncoding {
     CUC42,
+    CDS8
 }
 
 pub const fn time_length(enc: TimeEncoding) -> usize {
     match enc {
         TimeEncoding::CUC42 => 6,
+        TimeEncoding::CDS8 => 8
     }
 }
 
@@ -39,9 +41,7 @@ impl Time {
     }
 
     pub fn len(&self) -> usize {
-        match self.encoding {
-            TimeEncoding::CUC42 => return 6,
-        }
+        time_length(self.encoding)
     }
 
     pub fn encode(&self, arr: &mut [u8]) -> Result<(), std::io::Error> {
@@ -54,6 +54,21 @@ impl Time {
                 wrtr.write_u32::<BigEndian>(secs as u32)?;
                 let subsec = ((micro as f64) * 65536.0 / 1_000_000.0).round() as u16;
                 wrtr.write_u16::<BigEndian>(subsec)
+            }
+            TimeEncoding::CDS8 => {
+                let secs = self.time.as_secs();
+                let micro = self.time.subsec_micros();
+
+                let epoch_secs = secs + 378691200;
+                let days = (epoch_secs / 86400) as u16;
+                let milli = ((epoch_secs % 86400) * 1_000 + micro as u64 / 1_000) as u32;
+                let mic: u16 = (micro % 1_000) as u16;
+
+                let mut wrtr = Cursor::new(arr);
+                wrtr.write_u16::<BigEndian>(days)?;
+                wrtr.write_u32::<BigEndian>(milli)?;
+                wrtr.write_u16::<BigEndian>(mic)?;
+                Ok(())
             }
         }
     }
@@ -68,6 +83,18 @@ impl Time {
                 let nano = (subsec as f64 * 1_000_000_000.0 / 65536.0).round() as u32;
 
                 self.time = Duration::new(sec as u64, nano);
+                Ok(())
+            }
+            TimeEncoding::CDS8 => {
+                let mut rdr = Cursor::new(arr);
+                let days = rdr.read_u16::<BigEndian>()?;
+                let milli = rdr.read_u32::<BigEndian>()?;
+                let micro = rdr.read_u16::<BigEndian>()?;
+
+                let secs = days as u64 * 86400 - 378691200 + milli as u64 / 1_000;
+                let nano = ((milli % 1_000) * 1_000 + micro as u32) * 1_000; 
+
+                self.time = Duration::new(secs, nano);
                 Ok(())
             }
         }
@@ -85,6 +112,20 @@ impl Time {
                 Ok(Time {
                     time: Duration::new(sec as u64, nano),
                     encoding: TimeEncoding::CUC42,
+                })
+            }
+            TimeEncoding::CDS8 => {
+                let mut rdr = Cursor::new(arr);
+                let days = rdr.read_u16::<BigEndian>()?;
+                let milli = rdr.read_u32::<BigEndian>()?;
+                let micro = rdr.read_u16::<BigEndian>()?;
+
+                let secs = days as u64 * 86400 - 378691200 + milli as u64 / 1_000;
+                let nano = ((milli % 1_000) * 1_000 + micro as u32) * 1_000; 
+
+                Ok(Time {
+                    time: Duration::new(secs, nano),
+                    encoding: TimeEncoding::CDS8,
                 })
             }
         }
