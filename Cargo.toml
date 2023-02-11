@@ -1,0 +1,9 @@
+
+[workspace]
+members = [
+    "rs-space-core",
+    "rs-space-sle",
+    "cnc_receiver",
+    "packet_injector",
+    "raf_client",
+]
