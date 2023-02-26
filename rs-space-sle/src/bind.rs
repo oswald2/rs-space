@@ -1,12 +1,13 @@
 
-use rasn::AsnType;
-use rasn::types::{ConstOid, Tag};
+use rasn::{AsnType, Encode, Decode};
+use rasn::types::{Tag};
+
 
 use crate::common::*;
 
-#[derive(Debug)]
+#[derive(Debug, Decode)]
 pub struct SleBindInvocation {
-    pub credentials: Option<Credentials>,
+    pub credentials: Credentials,
     pub initiator: AuthorityIdentifier,
     pub port_id: PortID,
     pub service_type: ApplicationIdentifier,
@@ -15,5 +16,7 @@ pub struct SleBindInvocation {
 }
 
 impl AsnType for SleBindInvocation {
-    const TAG: Tag = Tag::SEQUENCE;
+    const TAG: Tag = Tag::new(rasn::types::Class::Context, 100);
 }
+
+

@@ -6,4 +6,5 @@ members = [
     "cnc_receiver",
     "packet_injector",
     "raf_client",
+    "bind_test",
 ]
