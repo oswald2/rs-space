@@ -1,0 +1,1388 @@
+
+{  iso identified-organization(3)
+   standards-producing-organization(112) ccsds(4)
+   space-link-extension(3) sle-transfer-services(1)
+   modules(1) common-modules(99) version-four(4) asn1-common-types(1)
+}
+DEFINITIONS
+IMPLICIT TAGS
+::=   BEGIN
+EXPORTS  ConditionalTime
+,        Credentials
+,        DeliveryMode
+,        Diagnostics
+,        Duration
+,        ForwardDuStatus
+,        IntPosLong
+,        IntPosShort
+,        IntUnsignedLong
+,        IntUnsignedShort
+,        InvokeId
+,        ParameterName
+,        SlduStatusNotification
+,        SpaceLinkDataUnit
+,        Time
+;
+ConditionalTime          ::=    CHOICE
+{ undefined          [0]     NULL
+, known              [1]    Time
+}
+-- If credentials are used, it will be necessary that
+-- the internal structure of the octet string is known
+-- to both parties. Since the structure will depend on
+-- algorithm used, it is not specified here. However,
+-- the peer entities may use ASN.1 encoding to make the
+-- internal structure visible.
+Credentials              ::=    CHOICE
+{ unused             [0]    NULL
+, used                [1]    OCTET STRING (SIZE (8 .. 256))
+}
+DeliveryMode             ::=    INTEGER
+{ rtnTimelyOnline                  (0)
+, rtnCompleteOnline                (1)
+, rtnOffline                       (2)
+, fwdOnline                        (3)
+, fwdOffline                       (4)
+}
+
+Diagnostics             ::=   INTEGER
+{ duplicateInvokeId              (100)
+, otherReason                    (127)
+}
+-- The Duration is expressed in microseconds
+Duration                ::=   IntUnsignedLong
+ForwardDuStatus         ::=   INTEGER
+{ radiated                       (0)
+, expired                        (1)
+, interrupted                    (2)
+, acknowledged                   (3)    -- FSP
+, productionStarted              (4)    -- CLTU: 'radiation started'
+, productionNotStarted           (5)    -- CLTU: 'radiation not started'
+, unsupportedTransmissionMode    (6)    -- FSP
+}
+-- 1 to (2^32)-1
+IntPosLong              ::=   INTEGER (1 .. 4294967295)
+-- 1 to (2^16)-1
+IntPosShort             ::=   INTEGER (1 .. 65535)
+-- 0 to (2^32)-1
+IntUnsignedLong         ::=   INTEGER (0 .. 4294967295)
+-- 0 to (2^16)-1
+IntUnsignedShort        ::=   INTEGER (0 .. 65535)
+InvokeId                ::=   IntUnsignedShort
+
+ParameterName                       ::=    INTEGER
+{ acquisitionSequenceLength                (201)
+, apidList                                 (2)
+, bitLockRequired                          (3)
+, blockingTimeoutPeriod                    (0)
+, blockingUsage                            (1)
+, bufferSize                               (4)
+, clcwGlobalVcid                           (202)
+, clcwPhysicalChannel                      (203)
+, deliveryMode                             (6)
+, directiveInvocation                      (7)
+, directiveInvocationOnline                (108)
+, expectedDirectiveIdentification          (8)
+, expectedEventInvocationIdentification    (9)
+, expectedSlduIdentification               (10)
+, fopSlidingWindow                         (11)
+, fopState                                 (12)
+, latencyLimit                             (15)
+, mapList                                  (16)
+, mapMuxControl                            (17)
+, mapMuxScheme                             (18)
+, maximumFrameLength                       (19)
+, maximumPacketLength                      (20)
+, maximumSlduLength                        (21)
+, minimumDelayTime                         (204)
+, modulationFrequency                      (22)
+, modulationIndex                          (23)
+, notificationMode                         (205)
+, permittedControlWordTypeSet              (101)
+, permittedGvcidSet                        (24)
+, permittedTcVcidSet                       (102)
+, permittedTransmissionMode                (107)
+, permittedUpdateModeSet                   (103)
+, plop1IdleSequenceLength                  (206)
+, plopInEffect                             (25)
+, protocolAbortMode                        (207)
+, reportingCycle                           (26)
+, requestedControlWordType                 (104)
+, requestedFrameQuality                    (27)
+, requestedGvcid                           (28)
+, requestedTcVcid                          (105)
+, requestedUpdateMode                      (106)
+, returnTimeoutPeriod                      (29)
+, rfAvailable                              (30)
+, rfAvailableRequired                      (31)
+, segmentHeader                            (32)
+, subcarrierToBitRateRatio                 (34)
+, timeoutType                              (35)
+, timerInitial                             (36)
+, transmissionLimit                        (37)
+, transmitterFrameSequenceNumber           (38)
+, vcMuxControl                             (39)
+, vcMuxScheme                              (40)
+, virtualChannel                           (41)
+}
+
+
+SlduStatusNotification ::=      INTEGER
+{ produceNotification              (0)
+, doNotProduceNotification         (1)
+}
+SpaceLinkDataUnit        ::=    OCTET STRING (SIZE (1 .. 65536))
+Time                      ::=   CHOICE
+{ ccsdsFormat         [0]    TimeCCSDS
+, ccsdsPicoFormat     [1]    TimeCCSDSpico
+}
+TimeCCSDS                 ::=   OCTET STRING (SIZE(8))
+-- P-field is implicit (not present, defaulted to 41 hex
+-- T-field:
+-- 2 octets: number of days since 1958/01/01 00:00:00
+-- 4 octets: number of milliseconds of the day
+-- 2 octets: number of microseconds of the millisecond
+--         (set to 0 if not used)
+-- This definition reflects exactly the format of the CCSDS defined
+-- time tag as used in spacelink data units (see Time Code Formats.
+-- Recommendation for Space Data System Standards, CCSDS 301.0-B-3.
+-- Blue Book. Issue 3. Washington, D.C.: CCSDS, January 2002).
+TimeCCSDSpico            ::=    OCTET STRING (SIZE(10))
+-- P-field is implicit (not present, defaulted to 42 hex
+-- T-field:
+-- 2 octets: number of days since 1958/01/01 00:00:00
+-- 4 octets: number of milliseconds of the day
+-- 4 octets: number of picoseconds of the millisecond
+--         (set to 0 if not used)
+-- This definition reflects exactly the format of the CCSDS defined
+-- time tag as used in spacelink data units (see Time Code Formats.
+-- Recommendation for Space Data System Standards, CCSDS 301.0-B-3.
+-- Blue Book. Issue 3. Washington, D.C.: CCSDS, January 2002).
+END
+
+
+
+
+
+
+
+
+{  iso identified-organization(3)
+   standards-producing-organization(112) ccsds(4)
+   space-link-extension(3) sle-transfer-services(1)
+   modules(1) common-modules(99) version-four(4) asn1-bind-types(2)
+}
+DEFINITIONS
+IMPLICIT TAGS
+::=   BEGIN
+EXPORTS  SleBindInvocation
+,        SleBindReturn
+,        SlePeerAbort
+,        SleUnbindInvocation
+,        SleUnbindReturn
+;
+IMPORTS Credentials
+,        IntPosShort
+   FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-TYPES
+         ServiceInstanceIdentifier
+   FROM CCSDS-SLE-TRANSFER-SERVICE-SERVICE-INSTANCE-ID
+;
+-- =============================================================
+-- The first part of the module definition contains the SLE-PDUs
+-- =============================================================
+SleBindInvocation          ::=    SEQUENCE
+{ invokerCredentials           Credentials
+, initiatorIdentifier          AuthorityIdentifier
+, responderPortIdentifier      PortId
+, serviceType                  ApplicationIdentifier
+, versionNumber                VersionNumber
+, serviceInstanceIdentifier ServiceInstanceIdentifier
+}
+SleBindReturn           ::=    SEQUENCE
+{ performerCredentials     Credentials
+, responderIdentifier      AuthorityIdentifier
+, result                    CHOICE
+   { positive           [0]    VersionNumber
+   , negative           [1]    BindDiagnostic
+   }
+}
+SlePeerAbort            ::=    PeerAbortDiagnostic
+SleUnbindInvocation     ::=    SEQUENCE
+{ invokerCredentials       Credentials
+, unbindReason             UnbindReason
+}
+
+SleUnbindReturn         ::=   SEQUENCE
+{ responderCredentials     Credentials
+, result                   CHOICE
+   { positive           [0]   NULL
+   }
+}
+-- =============================================================
+-- The second part of the module definition contains the types
+-- used by the SLE-PDUs declared in the first part.
+-- =============================================================
+ApplicationIdentifier      ::=    INTEGER
+{ rtnAllFrames                (0)
+, rtnInsert                   (1)
+, rtnChFrames                 (2)
+-- rtnChFrames includes rtnMcFrames and rtnVcFrames
+, rtnChFsh                    (3)
+-- rtnChFsh includes rtnMcFsh and rtnVcFsh
+, rtnChOcf                    (4)
+-- rtnChOcf includes rtnMcOcf and rtnVcOcf
+, rtnBitstr                   (5)    -- AOS
+, rtnSpacePkt                 (6)
+, fwdAosSpacePkt              (7)
+, fwdAosVca                   (8)
+, fwdBitstr                   (9)
+, fwdProtoVcdu                (10)
+, fwdInsert                   (11)
+, fwdCVcdu                    (12)
+, fwdTcSpacePkt               (13) -- conventional telecommand
+, fwdTcVca                    (14) -- conventional telecommand
+, fwdTcFrame                  (15)
+, fwdCltu                     (16)
+}
+AuthorityIdentifier     ::=   IdentifierString (SIZE (3 .. 16))
+BindDiagnostic                    ::=    INTEGER
+{ accessDenied                       (0)
+, serviceTypeNotSupported            (1)
+, versionNotSupported                (2)
+, noSuchServiceInstance              (3)
+, alreadyBound                       (4)
+, siNotAccessibleToThisInitiator     (5)
+, inconsistentServiceType            (6)
+, invalidTime                        (7)
+, outOfService                       (8)
+, otherReason                        (127)
+}
+IdentifierString        ::=   VisibleString (FROM (ALL EXCEPT " "))
+LogicalPortName         ::=    IdentifierString (SIZE (1 .. 128))
+PeerAbortDiagnostic           ::=    INTEGER
+{ accessDenied                   (0)
+, unexpectedResponderId          (1)
+, operationalRequirement         (2)
+, protocolError                  (3)
+, communicationsFailure          (4)
+, encodingError                  (5)
+, returnTimeout                  (6)
+, endOfServiceProvisionPeriod    (7)
+, unsolicitedInvokeId            (8)
+, otherReason                    (127)
+-- The range of this INTEGER shall be (0 .. 255).
+-- (128 .. 255) is reserved for diagnostic codes
+-- that are specific to the communications technology used.
+}
+PortId               ::=   LogicalPortName
+UnbindReason         ::=   INTEGER
+{ end                   (0)
+, suspend               (1)
+, versionNotSupported (2)
+, other                 (127)
+}
+VersionNumber        ::=   IntPosShort
+END
+
+
+-- CCSDS 912.1-B-3                    Page A-8                  July 2010
+--                        CCSDS HISTORICAL DOCUMENT
+--                      CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- A2.3  SLE TRANSFER SERVICE COMMON PDUS
+-- CCSDS-SLE-TRANSFER-SERVICE-COMMON-PDUS
+-- {  iso identified-organization(3)
+--    standards-producing-organization(112) ccsds(4)
+--    space-link-extension(3) sle-transfer-services(1)
+--    modules(1) common-modules(99) version-four(4) asn1-common-pdu(3)
+-- }
+-- DEFINITIONS
+-- IMPLICIT TAGS
+-- ::=   BEGIN
+-- EXPORTS  ReportingCycle
+-- ,        SleAcknowledgement
+-- ,        SleScheduleStatusReportInvocation
+-- ,        SleScheduleStatusReportReturn
+-- ,        SleStopInvocation
+-- ;
+-- IMPORTS Credentials
+-- ,        Diagnostics
+-- ,        InvokeId
+--    FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-TYPES
+-- ;
+-- -- =============================================================
+-- -- The first part of the module definition contains the SLE-PDUs
+-- -- =============================================================
+-- SleAcknowledgement      ::=    SEQUENCE
+-- { credentials              Credentials
+-- , invokeId                 InvokeId
+-- , result                    CHOICE
+--    { positiveResult     [0]    NULL
+--    , negativeResult     [1]    Diagnostics
+--    }
+-- }
+-- SleScheduleStatusReportInvocation     ::=    SEQUENCE
+-- { invokerCredentials                      Credentials
+-- , invokeId                                InvokeId
+-- , reportRequestType                       ReportRequestType
+-- }
+-- SleScheduleStatusReportReturn ::=     SEQUENCE
+-- { performerCredentials            Credentials
+-- , invokeId                        InvokeId
+-- , result                           CHOICE
+--    { positiveResult            [0]    NULL
+--    , negativeResult            [1]    DiagnosticScheduleStatusReport
+--    }
+-- }
+-- CCSDS 912.1-B-3                     Page A-9                         July 2010
+--                      CCSDS HISTORICAL DOCUMENT
+--                         CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- SleStopInvocation        ::=    SEQUENCE
+-- { invokerCredentials        Credentials
+-- , invokeId                  InvokeId
+-- }
+-- -- =============================================================
+-- -- The second part of the module definition contains the types
+-- -- used by the SLE-PDUs declared in the first part.
+-- -- =============================================================
+-- DiagnosticScheduleStatusReport     ::=    CHOICE
+-- { common                        [0]    Diagnostics
+-- , specific                      [1]    INTEGER
+--    { notSupportedInThisDeliveryMode       (0)   -- not used for
+--                                                  -- version 1 forward transfer
+--                                                  -- services
+--    ,     alreadyStopped                   (1)
+--    ,     invalidReportingCycle            (2)
+--    }
+-- }
+-- -- The cycle duration is expressed in seconds
+-- ReportingCycle           ::=    INTEGER (2 .. 600)
+-- ReportRequestType        ::=    CHOICE
+-- { immediately        [0]    NULL
+-- , periodically       [1]    ReportingCycle
+-- , stop               [2]     NULL
+-- }
+-- END
+-- CCSDS 912.1-B-3                     Page A-10                           July 2010
+--                         CCSDS HISTORICAL DOCUMENT
+--                     CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- A2.4  SLE TRANSFER SERVICE— SERVICE-INSTANCE-ID
+-- CCSDS-SLE-TRANSFER-SERVICE-SERVICE-INSTANCE-ID
+-- {  iso identified-organization (3) standards-producing-organization(112)
+--    ccsds(4) space-link-extension(3) sle-transfer-services(1)
+--    modules(1) common-modules(99) version-four(4)
+--    asn1-service-id-type(4)
+-- }
+DEFINITIONS
+IMPLICIT TAGS
+::= BEGIN
+EXPORTS ServiceInstanceIdentifier
+;
+-- Object Identifiers definition
+sagr     OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 52}
+spack    OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 53}
+fsl-fg   OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 14}
+rsl-fg   OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 38}
+cltu     OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 7}
+fsp      OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 10}
+raf      OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 22}
+rcf      OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 46}
+rcfsh    OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 44}
+rocf     OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 49}
+rsp      OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 40}
+tcf      OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 12}
+tcva     OBJECT IDENTIFIER    ::=    {iso 3 112 4 3 1 2 16}
+
+
+ATTRIBUTE             ::=   CLASS
+{ &id                    OBJECT IDENTIFIER UNIQUE
+}
+WITH SYNTAX { ID   &id }
+
+GeneralAttributes ATTRIBUTE    ::=
+{ serviceAgreement
+| servicePackage
+| forwardService
+| returnService
+}
+
+ServiceInstanceAttribute    ::=       SET SIZE(1) OF SEQUENCE
+{ identifier                          ATTRIBUTE.&id
+                                      ({ServiceInstanceAttributes})
+,  siAttributeValue                   VisibleString (SIZE (1 .. 256))
+}
+
+ServiceInstanceAttributes ATTRIBUTE ::=
+{ GeneralAttributes
+| ServiceNames
+}
+
+ServiceInstanceIdentifier   ::=   SEQUENCE OF ServiceInstanceAttribute
+ServiceNames ATTRIBUTE   ::=
+{ rafService
+| rcfService
+| rcfshService
+| rocfService
+| rspService
+| cltuService
+| fspService
+| tcfService
+| tcvaService
+}
+-- +++++++++++++++++++++++++++++++++++++
+-- CLTU Service Definition
+-- The cltu Service Id starts with "cltu" and is
+-- followed by the instance number.
+cltuService ATTRIBUTE       ::=   { ID cltu }
+-- +++++++++++++++++++++++++++++++++++++
+-- Forward Service Definition
+forwardService ATTRIBUTE    ::=   { ID fsl-fg     }
+-- +++++++++++++++++++++++++++++++++++++
+-- FSP Service Definition
+-- The fsp Service Id starts with "fsp" and is
+-- followed by the instance number.
+fspService ATTRIBUTE        ::=   { ID fsp     }
+-- +++++++++++++++++++++++++++++++++++++
+-- RAF Service Definition
+-- The raf Service Id starts with "onlc" or "onlt" or "offl" and is
+-- followed by the instance number.
+rafService ATTRIBUTE        ::=   { ID raf     }
+
+
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- RCF Service Definition
+-- -- The rcf Service Id starts with "onlc" or "onlt" or "offl" and is
+-- -- followed by the instance number.
+-- rcfService ATTRIBUTE       ::=   { ID rcf    }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- RCFSH Service Definition
+-- -- The rcfsh Service Id starts with "onlc" or "onlt" or "offl" and is
+-- -- followed by the instance number.
+-- rcfshService ATTRIBUTE     ::=   { ID rcfsh }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- Return Service Definition
+-- returnService ATTRIBUTE    ::=   { ID rsl-fg     }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- ROCF Service Definition
+-- -- The rocf Service Id starts with "onlc" or "onlt" or "offl" and is
+-- -- followed by the instance number.
+-- rocfService ATTRIBUTE      ::=   { ID rocf }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- RSP Service Definition
+-- -- The rocf Service Id starts with "onlc" or "onlt" or "offl" and is
+-- -- followed by the instance number.
+-- rspServiceId ATTRIBUTE     ::=   { ID rsp    }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- Service Agreement Definition
+-- serviceAgreement ATTRIBUTE ::=   { ID sagr   }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- Service Package Definition
+-- servicePackage ATTRIBUTE   ::=   { ID spack }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- TCF Service Definition
+-- -- The tcf Service Id starts with "tcf" and is
+-- -- followed by the instance number.
+-- tcfServiceId ATTRIBUTE     ::=   { ID tcf    }
+-- -- +++++++++++++++++++++++++++++++++++++
+-- -- TCVA Service Definition
+-- -- The tcva Service Id starts with "tcva" and is
+-- -- followed by the instance number.
+-- tcvaServiceId ATTRIBUTE    ::=   { ID tcva }
+-- END
+-- CCSDS 912.1-B-3                   Page A-14                         July 2010
+--                         CCSDS HISTORICAL DOCUMENT
+--                       CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- A2.5  CLTU TRANSFER STRUCTURES
+-- CCSDS-SLE-TRANSFER-SERVICE-CLTU-STRUCTURES
+-- { iso identified-organization (3) standards-producing-organization(112)
+-- ccsds(4) space-link-extension(3) sle-transfer-services(1)
+-- modules(1) forward-cltu-service(21) version-four(4)
+-- asn1-transfer-structures(1)}
+-- DEFINITIONS
+-- IMPLICIT TAGS
+-- ::= BEGIN
+-- EXPORTS      BufferSize
+-- ,            CltuData
+-- ,            CltuGetParameter
+-- ,            CltuIdentification
+-- ,            CltuLastProcessed
+-- ,            CltuLastOk
+-- ,            CltuNotification
+-- ,            CltuParameterName
+-- ,            CltuStatus
+-- ,            DiagnosticCltuGetParameter
+-- ,            DiagnosticCltuStart
+-- ,            DiagnosticCltuThrowEvent
+-- ,            DiagnosticCltuTransferData
+-- ,            EventInvocationId
+-- ,            NumberOfCltusProcessed
+-- ,            NumberOfCltusRadiated
+-- ,            NumberOfCltusReceived
+-- ,            ProductionStatus
+-- ,            UplinkStatus
+-- ;
+-- IMPORTS      ConditionalTime
+-- ,            DeliveryMode
+-- ,            Diagnostics
+-- ,            Duration
+-- ,            ForwardDuStatus
+-- ,            IntPosLong
+-- ,            IntPosShort
+-- ,            IntUnsignedLong
+-- ,            IntUnsignedShort
+-- ,            ParameterName
+-- ,            SpaceLinkDataUnit
+-- ,            Time
+--    FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-TYPES
+--              ReportingCycle
+--    FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-PDUS
+-- ;
+-- -- Available buffer in octets
+-- BufferSize                               ::= IntUnsignedLong
+-- CltuData                                 ::= SpaceLinkDataUnit
+-- CltuDeliveryMode                         ::= DeliveryMode
+-- ( fwdOnline
+-- )
+-- CCSDS 912.1-B-3                    Page A-15                        July 2010
+--                       CCSDS HISTORICAL DOCUMENT
+--                        CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- CltuGetParameter                 ::=     CHOICE
+-- { parAcquisitionSequenceLength       [0]    SEQUENCE
+--    { parameterName                   ParameterName
+-- (acquisitionSequenceLength)
+--    , parameterValue                  IntUnsignedShort
+--    }
+-- , parBitLockRequired                 [1]    SEQUENCE
+-- { parameterName                          ParameterName (bitLockRequired)
+-- , parameterValue                         INTEGER
+--    { yes                                          (0)
+--    , no                                           (1)
+--    }
+-- }
+-- , parGlobalVcid                      [2]    SEQUENCE
+-- { parameterName                          ParameterName (clcwGlobalVcid)
+-- , parameterValue                         GvcId
+-- }
+-- , parClcwPhysicalChannel             [3]    SEQUENCE
+-- { parameterName                          ParameterName (clcwPhysicalChannel)
+-- , parameterValue                         VisibleString (SIZE (1..32))
+-- }
+-- , parDeliveryMode                    [4]    SEQUENCE
+--    { parameterName                       ParameterName (deliveryMode)
+--    , parameterValue                     CltuDeliveryMode
+--    }
+-- , parCltuIdentification              [5]    SEQUENCE
+--    { parameterName                   ParameterName
+-- (expectedSlduIdentification)
+--    , parameterValue                  CltuIdentification
+--    }
+-- , parEventInvocationIdentification [6]      SEQUENCE
+--    { parameterName                   ParameterName
+-- (expectedEventInvocationIdentification)
+--    , parameterValue                     EventInvocationId
+--    }
+-- , parMaximumCltuLength               [7]    SEQUENCE
+--    { parameterName                      ParameterName (maximumSlduLength)
+--    , parameterValue                     INTEGER (12 .. 4096)
+--    }
+-- , parMinimumDelayTime                [8]    SEQUENCE
+--    { parameterName                      ParameterName (minimumDelayTime)
+--    , parameterValue                     Duration
+--    }
+-- , parModulationFrequency             [9]    SEQUENCE
+--    { parameterName                      ParameterName (modulationFrequency)
+--    , parameterValue                     ModulationFrequency
+--    }
+-- , parModulationIndex                 [10] SEQUENCE
+--    { parameterName                      ParameterName (modulationIndex)
+--    , parameterValue                     ModulationIndex
+--    }
+-- , parNotificationMode                [11] SEQUENCE
+--    { parameterName                      ParameterName (notificationMode)
+--    , parameterValue                     INTEGER
+-- { deferred                                  (0)
+-- , immediate                                 (1)
+--    }
+-- }
+-- , parPlop1IdleSequenceLength         [12] SEQUENCE
+--    { parameterName                      ParameterName
+-- CCSDS 912.1-B-3                   Page A-16                           July 2010
+--                        CCSDS HISTORICAL DOCUMENT
+--                     CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- (plop1IdleSequenceLength)
+--    , parameterValue                   IntUnsignedShort
+--    }
+-- , parPlopInEffect              [13]   SEQUENCE
+--    { parameterName                    ParameterName (plopInEffect)
+--    , parameterValue                   INTEGER
+-- { plop1                                   (0)
+-- , plop2                                   (1)
+--    }
+-- }
+-- , parProtocolAbortMode         [14]   SEQUENCE
+--    { parameterName                    ParameterName (protocolAbortMode)
+--    , parameterValue                   INTEGER
+-- { abort                                   (0)
+-- , continue                                (1)
+--    }
+-- }
+-- , parReportingCycle            [15]   SEQUENCE
+-- { parameterName                       ParameterName (reportingCycle)
+-- , parameterValue                      CurrentReportingCycle
+-- }
+-- , parReturnTimeout             [16]   SEQUENCE
+--    { parameterName                    ParameterName (returnTimeoutPeriod)
+--    , parameterValue                   TimeoutPeriod
+--    }
+-- , parRfAvailableRequired       [17]   SEQUENCE
+-- { parameterName                       ParameterName   (rfAvailableRequired)
+-- , parameterValue                      INTEGER
+--    { yes                                        (0)
+--    , no                                         (1)
+--    }
+-- }
+-- , parSubcarrierToBitRateRatio  [18]   SEQUENCE
+--    { parameterName                    ParameterName
+-- (subcarrierToBitRateRatio)
+--    , parameterValue                   SubcarrierDivisor
+--    }
+-- }
+-- CltuIdentification             ::=    IntUnsignedLong
+-- CltuLastOk                            ::=    CHOICE
+-- { noCltuOk                                   [0]      NULL
+-- , cltuOk                                     [1]      SEQUENCE
+-- { cltuIdentification               CltuIdentification
+-- , radiationStopTime                Time
+-- }
+-- }
+-- CltuLastProcessed              ::=    CHOICE
+-- { noCltuProcessed                     [0]    NULL
+-- , cltuProcessed                       [1]    SEQUENCE
+-- { cltuIdentification               CltuIdentification
+-- , radiationStartTime               ConditionalTime
+-- , cltuStatus                              CltuStatus
+-- }
+-- }
+-- CltuNotification                   ::=    CHOICE
+-- { cltuRadiated                        [0]    NULL
+-- CCSDS 912.1-B-3                 Page A-17                           July 2010
+--                     CCSDS HISTORICAL DOCUMENT
+--                        CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- ,  slduExpired                              [1]    NULL
+-- ,  productionInterrupted                    [2]    NULL
+-- ,  productionHalted                     [3]    NULL
+-- ,  productionOperational                    [4]    NULL
+-- ,  bufferEmpty                              [5]    NULL
+-- ,  actionListCompleted                      [6]    EventInvocationId
+-- ,  actionListNotCompleted                   [7]    EventInvocationId
+-- ,  eventConditionEvFalse                    [8]    EventInvocationId
+-- }
+-- CltuParameterName                ::=    ParameterName
+-- ( acquisitionSequenceLength
+-- | bitLockRequired
+-- | clcwGlobalVcid
+-- | clcwPhysicalChannel
+-- | deliveryMode
+-- | expectedSlduIdentification
+-- | expectedEventInvocationIdentification
+-- | maximumSlduLength
+-- | minimumDelayTime
+-- | modulationFrequency
+-- | modulationIndex
+-- | notificationMode
+-- | plop1IdleSequenceLength
+-- | plopInEffect
+-- | protocolAbortMode
+-- | reportingCycle
+-- | returnTimeoutPeriod
+-- | rfAvailableRequired
+-- | subcarrierToBitRateRatio
+-- )
+-- CltuStatus                              ::=     ForwardDuStatus
+-- ( radiated
+-- | expired
+-- | interrupted
+-- | productionStarted                     -- radiation started
+-- | productionNotStarted                  -- radiation not started
+-- )
+-- CurrentReportingCycle           ::=     CHOICE
+-- { periodicReportingOff          [0]     NULL
+-- , periodicReportingOn           [1]     ReportingCycle
+-- }
+-- DiagnosticCltuGetParameter   ::=     CHOICE
+-- { common                                    [0]    Diagnostics
+-- , specific                                  [1]    INTEGER
+--    { unknownParameter                       (0)
+--    }
+-- }
+-- DiagnosticCltuStart             ::=     CHOICE
+-- { common                                    [0]    Diagnostics
+-- , specific                                  [1]    INTEGER
+--    { outOfService                       (0)
+--    , unableToComply                     (1)
+--    , productionTimeExpired                  (2)
+--    , invalidCltuId                      (3)
+-- CCSDS 912.1-B-3                   Page A-18                          July 2010
+--                        CCSDS HISTORICAL DOCUMENT
+--                     CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--    }
+-- }
+-- DiagnosticCltuThrowEvent     ::=    CHOICE
+-- { common                                   [0]    Diagnostics
+-- , specific                                 [1]    INTEGER
+--    { operationNotSupported                 (0)
+--    , eventInvocIdOutOfSequence             (1)
+--    , noSuchEvent                       (2)
+--    }
+-- }
+-- DiagnosticCltuTransferData   ::=    CHOICE
+-- { common                                       [0]      Diagnostics
+-- , specific                                     [1]      INTEGER
+--    { unableToProcess                          (0)
+--    , unableToStore                         (1)
+--    , outOfSequence                         (2)
+--    , inconsistentTimeRange                    (3)
+--    , invalidTime                           (4)
+--    , lateSldu                                  (5)
+--    , invalidDelayTime                         (6)
+--    , cltuError                             (7)
+--    }
+-- }
+-- EventInvocationId                      ::=     IntUnsignedLong
+-- CCSDS 912.1-B-3                  Page A-19                          July 2010
+--                     CCSDS HISTORICAL DOCUMENT
+--                        CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- GvcId                       ::= SEQUENCE
+-- {   spacecraftId                    INTEGER (0 .. 1023)
+-- ,   versionNumber                   INTEGER (0 .. 3)
+-- ,   vcId                            CHOICE
+--       { masterChannel                 [0]    NULL
+--       , virtualChannel                [1]    VcId
+--       }
+-- }
+-- -- Notes:
+-- -- The permissible range of the spacecraftId depends on the versionNumber.
+-- -- PTM and AOS frames are supported.
+-- -- In case of AOS the permissible range is 0 to 255 (8 bits).
+-- -- In case of PTM the permissible range is 0 to 1023 (10 bits).
+-- -- either the subcarrier frequency, or,
+-- -- in case of direct modulation, the bit rate, measured in 1/10 Hz
+-- ModulationFrequency              ::=     IntPosLong
+-- -- modulation index angle expressed in 1/1000 radians
+-- ModulationIndex                       ::=    IntPosShort
+-- NumberOfCltusProcessed        ::=     IntUnsignedLong
+-- NumberOfCltusRadiated         ::=     IntUnsignedLong
+-- NumberOfCltusReceived         ::=     IntUnsignedLong
+-- ProductionStatus                      ::=    INTEGER
+-- { operational                                (0)
+-- , configured                                 (1)
+-- , interrupted                                (2)
+-- , halted                                     (3)
+-- }
+-- -- Divisor of the subcarrier frequency
+-- -- If direct carrier modulation, the value is 1
+-- SubcarrierDivisor                 ::=    IntPosShort
+-- -- measured in seconds
+-- TimeoutPeriod                            ::=    INTEGER (1 .. 600)
+-- UplinkStatus                             ::=     INTEGER
+-- { uplinkStatusNotAvailable                   (0)
+-- , noRfAvailable                              (1)
+-- , noBitLock                                  (2)
+-- , nominal                                    (3)
+-- }
+-- VcId                                     ::= INTEGER (0..63)
+-- -- The actual permissible range depends on the version number
+-- -- of the associated GVCID.
+-- END
+-- CCSDS 912.1-B-3                    Page A-20                        July 2010
+--                        CCSDS HISTORICAL DOCUMENT
+--                       CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- A2.6  CLTU INCOMING PDUS
+-- CCSDS-SLE-TRANSFER-SERVICE-CLTU-INCOMING-PDUS
+-- { iso identified-organization(3) standards-producing-organization(112)
+-- ccsds(4) space-link-extension(3) sle-transfer-services(1)
+-- modules(1) forward-cltu-service(21) version-four(4)
+-- asn1-incoming-pdus(2)}
+-- DEFINITIONS
+-- IMPLICIT TAGS
+-- ::= BEGIN
+-- IMPORTS      ConditionalTime
+-- ,            Credentials
+-- ,            Duration
+-- ,            IntPosShort
+-- ,            InvokeId
+-- ,            SlduStatusNotification
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-TYPES
+--              SleScheduleStatusReportInvocation
+-- ,            SleStopInvocation
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-PDUS
+--              CltuData
+-- ,            CltuIdentification
+-- ,            CltuParameterName
+-- ,            EventInvocationId
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-CLTU-STRUCTURES
+--              SleBindInvocation
+-- ,            SlePeerAbort
+-- ,            SleUnbindInvocation
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-BIND-TYPES
+-- ;
+-- -- =============================================================
+-- -- The first part of the module definition contains the CLTU type
+-- -- that contains all the possible PDUs the provider may receive.
+-- -- =============================================================
+-- CltuUserToProviderPdu          ::=    CHOICE
+-- {  cltuBindInvocation                    [100] SleBindInvocation
+-- ,  cltuUnbindInvocation                  [102] SleUnbindInvocation
+-- ,  cltuStartInvocation                   [0]      CltuStartInvocation
+-- ,  cltuStopInvocation                    [2]      SleStopInvocation
+-- ,  cltuScheduleStatusReportInvocation    [4]
+--    SleScheduleStatusReportInvocation
+-- ,  cltuGetParameterInvocation            [6]      CltuGetParameterInvocation
+-- ,  cltuThrowEventInvocation              [8]      CltuThrowEventInvocation
+-- ,  cltuTransferDataInvocation            [10]     CltuTransferDataInvocation
+-- ,  cltuPeerAbortInvocation               [104]    SlePeerAbort
+-- }
+-- CCSDS 912.1-B-3                    Page A-21                          July 2010
+--                       CCSDS HISTORICAL DOCUMENT
+--                        CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- -- =============================================================
+-- -- The second part of the module definition contains the types
+-- -- used by the CLTU-PDUs declared in the first part.
+-- -- =============================================================
+-- CltuGetParameterInvocation    ::=     SEQUENCE
+-- { invokerCredentials                  Credentials
+-- , invokeId                            InvokeId
+-- , cltuParameter                   CltuParameterName
+-- }
+-- CltuStartInvocation        ::=   SEQUENCE
+-- { invokerCredentials                  Credentials
+-- , invokeId                            InvokeId
+-- , firstCltuIdentification             CltuIdentification
+-- }
+-- CltuThrowEventInvocation      ::=     SEQUENCE
+-- { invokerCredentials                  Credentials
+-- , invokeId                            InvokeId
+-- , eventInvocationIdentification       EventInvocationId
+-- , eventIdentifier                     IntPosShort
+-- , eventQualifier                      OCTET STRING (SIZE (1 .. 128))
+-- }
+-- CltuTransferDataInvocation    ::=     SEQUENCE
+-- { invokerCredentials                  Credentials
+-- , invokeId                            InvokeId
+-- , cltuIdentification                  CltuIdentification
+-- , earliestTransmissionTime            ConditionalTime
+-- , latestTransmissionTime              ConditionalTime
+-- , delayTime                           Duration
+-- , slduRadiationNotification           SlduStatusNotification
+-- , cltuData                            CltuData
+-- }
+-- END
+-- CCSDS 912.1-B-3                    Page A-22                         July 2010
+--                        CCSDS HISTORICAL DOCUMENT
+--                      CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- A2.7  CLTU OUTGOING PDUS
+-- CCSDS-SLE-TRANSFER-SERVICE-CLTU-OUTGOING-PDUS
+-- { iso identified-organization (3) standards-producing-organization(112)
+-- ccsds(4) space-link-extension(3) sle-transfer-services(1)
+-- modules(1) forward-cltu-service(21) version-four(4)
+-- asn1-outgoing-pdus(3) }
+-- DEFINITIONS
+-- IMPLICIT TAGS
+-- ::= BEGIN
+-- IMPORTS      ConditionalTime
+-- ,                     Credentials
+-- ,                     InvokeId
+-- ,                     Time
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-TYPES
+--                       SleAcknowledgement
+-- ,                     SleScheduleStatusReportReturn
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-COMMON-PDUS
+--                       SleBindReturn
+-- ,                     SleUnbindReturn
+-- ,                     SlePeerAbort
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-BIND-TYPES
+--                       BufferSize
+-- ,                     CltuGetParameter
+-- ,                     CltuIdentification
+-- ,                     CltuLastProcessed
+-- ,                     CltuLastOk
+-- ,                     CltuNotification
+-- ,                     CltuStatus
+-- ,                     DiagnosticCltuGetParameter
+-- ,                     DiagnosticCltuStart
+-- ,                     DiagnosticCltuThrowEvent
+-- ,                     DiagnosticCltuTransferData
+-- ,                     EventInvocationId
+-- ,                     NumberOfCltusProcessed
+-- ,                     NumberOfCltusRadiated
+-- ,                     NumberOfCltusReceived
+-- ,                     ProductionStatus
+-- ,                     UplinkStatus
+-- FROM CCSDS-SLE-TRANSFER-SERVICE-CLTU-STRUCTURES
+-- ;
+-- -- =============================================================
+-- -- The first part of the module definition contains the CLTU type
+-- -- that contains all the possible PDUs the provider may send.
+-- -- =============================================================
+-- CltuProviderToUserPdu          ::=    CHOICE
+-- { cltuBindReturn                      [101] SleBindReturn
+-- , cltuUnbindReturn                    [103] SleUnbindReturn
+-- , cltuStartReturn                     [1]    CltuStartReturn
+-- CCSDS 912.1-B-3                    Page A-23                        July 2010
+--                      CCSDS HISTORICAL DOCUMENT
+--                         CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- ,  cltuStopReturn                    [3]    SleAcknowledgement
+-- ,  cltuScheduleStatusReportReturn           [5]
+--    SleScheduleStatusReportReturn
+-- ,  cltuGetParameterReturn                   [7]    CltuGetParameterReturn
+-- ,  cltuThrowEventReturn                     [9]    CltuThrowEventReturn
+-- ,  cltuTransferDataReturn                   [11] CltuTransferDataReturn
+-- ,  cltuAsyncNotifyInvocation                [12] CltuAsyncNotifyInvocation
+-- ,  cltuStatusReportInvocation               [13] CltuStatusReportInvocation
+-- ,  cltuPeerAbortInvocation                  [104] SlePeerAbort
+-- }
+-- -- =============================================================
+-- -- The second part of the module definition contains the types
+-- -- used by the CLTU-PDUs declared in the first part.
+-- -- =============================================================
+-- CltuAsyncNotifyInvocation     ::=    SEQUENCE
+-- { invokerCredentials                 Credentials
+-- , cltuNotification                   CltuNotification
+-- , cltuLastProcessed                  CltuLastProcessed
+-- , cltuLastOk                         CltuLastOk
+-- , productionStatus                   ProductionStatus
+-- , uplinkStatus                       UplinkStatus
+-- }
+-- CltuGetParameterReturn        ::=    SEQUENCE
+-- { performerCredentials                  Credentials
+-- , invokeId                              InvokeId
+-- , result                                CHOICE
+--    { positiveResult                     [0]    CltuGetParameter
+--    , negativeResult                     [1]    DiagnosticCltuGetParameter
+--    }
+-- }
+-- CltuStartReturn            ::=   SEQUENCE
+-- { performerCredentials                  Credentials
+-- , invokeId                              InvokeId
+-- , result                                CHOICE
+-- { positiveResult                        [0]     SEQUENCE
+--       { startRadiationTime       Time
+--       , stopRadiationTime        ConditionalTime
+--       }
+--    , negativeResult                     [1]    DiagnosticCltuStart
+--    }
+-- }
+-- CltuStatusReportInvocation    ::=    SEQUENCE
+-- { invokerCredentials                    Credentials
+-- , cltuLastProcessed                     CltuLastProcessed
+-- , cltuLastOk                            CltuLastOk
+-- , cltuProductionStatus                  ProductionStatus
+-- , uplinkStatus                          UplinkStatus
+-- , numberOfCltusReceived                 NumberOfCltusReceived
+-- , numberOfCltusProcessed                NumberOfCltusProcessed
+-- , numberOfCltusRadiated                 NumberOfCltusRadiated
+-- , cltuBufferAvailable                   BufferSize
+-- }
+-- CltuThrowEventReturn          ::=    SEQUENCE
+-- CCSDS 912.1-B-3                   Page A-24                            July 2010
+--                         CCSDS HISTORICAL DOCUMENT
+--                     CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- {  performerCredentials              Credentials
+-- ,  invokeId                          InvokeId
+-- ,  eventInvocationIdentification     EventInvocationId
+-- ,  result                                   CHOICE
+--    { positiveResult                         [0]   NULL
+--    , negativeResult                         [1]   DiagnosticCltuThrowEvent
+--    }
+-- }
+-- CltuTransferDataReturn     ::=   SEQUENCE
+-- { performerCredentials               Credentials
+-- , invokeId                           InvokeId
+-- , cltuIdentification                 CltuIdentification
+-- , cltuBufferAvailable                BufferSize
+-- , result                                    CHOICE
+-- { positiveResult                            [0]   NULL
+-- , negativeResult                            [1]   DiagnosticCltuTransferData
+-- }
+-- }
+-- END
+-- CCSDS 912.1-B-3                   Page A-25                           July 2010
+--                     CCSDS HISTORICAL DOCUMENT
+--                         CCSDS HISTORICAL DOCUMENT
+--              CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                         ANNEX B
+--                                PRODUCTION STATUS
+--                                     (NORMATIVE)
+-- This annex describes the states and transitions of the forward physical channel, and presents
+-- in tabular form the effect of production status on the processing of invocations of the
+-- Forward CLTU transfer service.
+-- The possible transitions of production status of the Forward CLTU service are shown in
+-- figure B-1 below.
+--                                             Halted
+--         Configured
+--                                                                          Interrupted
+--                                          Operational
+--                     Figure B-1: CLTU Production Status Transitions
+-- Changes in production status occur for reasons outlined in table B-1.
+-- CCSDS 912.1-B-3                            Page B-1                                  July 2010
+--                         CCSDS HISTORICAL DOCUMENT
+--                              CCSDS HISTORICAL DOCUMENT
+--                CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                   Table B-1: Production Status Changes and Notifications
+-- Start Status      End Status                Cause of Status Change                     Notification
+-- Configured       Operational   Management action to make the production process       ‘production
+--                                operational; typically includes: completion of Uplink  operational’
+--                                Sweep, and radiation of the Acquisition Sequence.
+--                                Optionally, bit-lock and/or rf-available may be
+--                                required before production-status can
+--                                change to ‘operational’. See table 3-11 and NOTE
+--                                1.
+--                                If any error occurs that prevents the transition to
+--                                production status ‘operational’ the production status
+--                                reported will still stay ‘configured’. If the status
+--                                remains ‘configured’ for an extended period the user
+--                                will have to check for the reasons by means outside
+--                                the scope of this document.
+-- Operational      Interrupted   Occurrence of a production fault detected by the       ‘production
+--                                provider.                                              interrupted’;
+--                                                                                       but see NOTE
+--                                                                                       2 and 3
+-- Interrupted      Operational   Maintenance action typically is required to correct a  ‘production
+--                                production fault. The CLTU production-status           operational’
+--                                returns to ‘operational’ when the provider detects
+--                                that the fault is corrected.
+--  [Any]           Halted        Direct management action is required, such as an       ‘production
+--                                operator directive causing the provider to halt        halted’
+--                                production.
+-- Halted           Configured    Direct management action is required, such as an       none
+--                                operator directive restoring the desired configuration
+--                                and setting the production-status to
+--                                ‘configured’.
+-- NOTES
+-- 1        The initial production-status value is ‘configured’. When requested by the
+--          supported agency (either by schedule or via voice communication), the supporting
+--          agency starts CMM-1 by turning on the uplink and performing the nominal uplink
+--          sweep in accordance with the mission specific parameters. The production-
+--          status changes from ‘configured’ to ‘operational’:
+--          a) at completion of the uplink sweep, if plop-in-effect is ‘PLOP-1’ and rf-
+--             available-required is set to ‘no’;
+-- CCSDS 912.1-B-3                               Page B-2                                    July 2010
+--                              CCSDS HISTORICAL DOCUMENT
+--                           CCSDS HISTORICAL DOCUMENT
+--                CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--         b) at completion of the uplink sweep, if plop-in-effect is ‘PLOP-1’, rf-
+--             available-required is set to ‘yes’ and the CLCW indicates ‘RF available’;
+--         c) at completion of the radiation of the acquisition sequence, if plop-in-effect
+--             is ‘PLOP-2’, rf-available-required is set to ‘no’ and bit-lock-
+--             required is set to ‘no’;
+--         d) at completion of the radiation of the acquisition sequence, if plop-in-effect
+--             is ‘PLOP-2’, rf-available-required is set to ‘yes’, the CLCW indicates
+--             ‘RF available’ and bit-lock-required is set to ‘no’;
+--         e) at completion of the radiation of the acquisition sequence, if plop-in-effect
+--             is ‘PLOP-2’, rf-available-required is set to ‘no’, bit-lock-
+--             required is set to ‘yes’ and the CLCW flags ‘bit lock’;
+--         f) at completion of the radiation of the acquisition sequence, if plop-in-effect
+--             is ‘PLOP-2’, rf-available-required is set to ‘yes’, bit-lock-
+--             required is set to ‘yes’ and the CLCW indicates both ‘RF available’ and ‘bit
+--             lock’.
+-- 2       The production-status changes to ‘interrupted’ when the checking of
+--         uplink-status is required (rf-available-required and/or bit-lock
+--         required set to ‘yes’) and uplink-status has no longer the required value.
+-- 3       This Recommended Standard does not require that a production interruption be
+--         notified immediately to the user (see 3.7.2.3). If a fault affecting production can be
+--         corrected before the provider attempts to process a CLTU, the ‘production
+--         interrupted’ notification need not be sent. It is an implementation choice whether
+--         always to send the ‘production interrupted’ notification immediately on occurrence of
+--         a production fault or to wait until a CLTU is ready to be radiated before sending the
+--         notification. The implementation choice is documented in the service configuration
+--         via the notification-mode parameter, which may have a value of ‘immediate’
+--         or ‘deferred’, corresponding to immediate or deferred notification in event of a
+--         production interruption.
+-- The effect of production-status on the processing of Forward CLTU transfer service
+-- invocations is specified in 3.1.10 through 3.12 and in table 4-1. The effects are summarized
+-- in table B-2 for convenient reference.
+-- CCSDS 912.1-B-3                             Page B-3                                  July 2010
+--                           CCSDS HISTORICAL DOCUMENT
+--                              CCSDS HISTORICAL DOCUMENT
+--               CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                  Table B-2: Effect of Production Status on Operations
+--      Production           Operation                Effect                Diagnostic
+--         Status
+--     Halted          CLTU-BIND               Rejected              ‘out of service’
+--                     CLTU-START              Rejected              ‘out of service’
+--                     CLTU-TRANSFER-          Rejected              ‘unable to process’
+--                     DATA
+--                     Other operations        None specified        N/A
+--     Configured      All operations          None specified        N/A
+--     Operational     All operations          None specified        N/A
+--     Interrupted     CLTU-START              Rejected              ‘unable to comply’
+--                     CLTU-TRANSFER-          Rejected; but see     ‘unable to process’
+--                     DATA                    NOTE
+--                     Other operations        None specified        N/A
+-- NOTE – When the value of the notification-mode parameter is ‘deferred’, CLTU-
+--            TRANSFER-DATA invocations are rejected only after the provider has notified
+--            the user that a production interruption has occurred. See 3.7.2.3.
+-- CCSDS 912.1-B-3                            Page B-4                                   July 2010
+--                              CCSDS HISTORICAL DOCUMENT
+--                            CCSDS HISTORICAL DOCUMENT
+--                 CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                                ANNEX C
+--                         CONFORMANCE OPTIONS MATRIX
+--                                            (NORMATIVE)
+-- This annex provides the Conformance Matrix for implementations of SLE Forward CLTU
+-- Service systems. An SLE Forward CLTU Service system will be considered to be
+-- ‘conformant’ if the mandatory elements identified in the matrix are implemented as
+-- described in this Recommended Standard.
+--                Table C-1: Conformance Matrix for CLTU Service (Operations)
+--                 CLTU Operations                                   Optional / Mandatory
+--   CLTU-BIND                                        These operations are mandatory. All parameters are
+--   CLTU-UNBIND                                      also mandatory with the exception of:
+--                                                               invoker-credentials
+--                                                             performer-credentials
+--                                                    Support of the version-number negotiation as
+--                                                    part of the CLTU-BIND operation is optional.
+--   CLTU-START                                       These operations are mandatory. All parameters are
+--   CLTU-STOP                                        also mandatory with the exception of:
+--   CLTU-TRANSFER-DATA                                          invoker-credentials
+--   CLTU-ASYNC-NOTIFY                                          performer-credential
+--   CLTU-SCHEDULE-STATUS-REPORT                                stop-production-time
+--   CLTU-STATUS-REPORT
+--   CLTU-GET-PARAMETER
+--   CLTU-THROW-EVENT                                 This operation is optional.
+--   CLTU-PEER-ABORT                                  This operation is mandatory. The diagnostic
+--                                                    parameter is also mandatory.
+--         Table C-2: Conformance Matrix for CLTU Service (Other Requirements)
+--                     Other Sections                                  Optional / Mandatory
+--   Protocol Abort Mode Parameter (see table 3-1     The parameter is optional. The default behavior of
+--   and 4.1.5.5)                                     the provider in event of protocol abort shall be as
+--                                                    described for the ‘flush’ value of the protocol-abort-
+--                                                    mode parameter.
+--   Notification-mode Parameter (see table 3-1 and   This parameter is optional; its purpose is only to
+--   3.7.2.3)                                         document the behavior of the provider.
+-- CCSDS 912.1-B-3                                  Page C-1                                           July 2010
+--                            CCSDS HISTORICAL DOCUMENT
+--                                     CCSDS HISTORICAL DOCUMENT
+--                 CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                       Other Sections                             Optional / Mandatory
+--  Provider Buffering Requirements (see 3.1.10)   Mandatory minimum size is 4,194,304 octets.
+--                                                 NOTE – This number is equivalent to 1024 CLTUs
+--                                                           each of length of 4096 octets.
+--  State transition table (see table 4-1)         Mandatory.
+--  ASN.1 Protocol Specification (annex A)         All data types are mandatory. Implementations
+--                                                 may vary as described in the annex.
+-- CCSDS 912.1-B-3                               Page C-2                                       July 2010
+--                                     CCSDS HISTORICAL DOCUMENT
+--                           CCSDS HISTORICAL DOCUMENT
+--                  CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                         ANNEX D
+--                                INDEX TO DEFINITIONS
+--                                     (INFORMATIVE)
+-- This annex provides an index to the terminology defined in the references.
+-- Term                                                           Reference
+-- (data) type                                                    reference [6]
+-- (data) value                                                   reference [6]
+-- abstract binding                                               reference [1]
+-- abstract object                                                reference [1]
+-- abstract port                                                  reference [1]
+-- abstract service                                               reference [1]
+-- abstract syntax                                                reference [7]
+-- Abstract Syntax Notation One (ASN.1)                           reference [6]
+-- acquisition sequence                                           reference [2]
+-- application entity                                             reference [7]
+-- application layer                                              reference [7]
+-- association                                                    subsection 1.6.1.6.1
+-- Carrier Modulation Mode (CMM)                                  reference [2]
+-- CLTU channel                                                   reference [1]
+-- Communications Link Control Word (CLCW)                        reference [3]
+-- Communications Link Transmission Unit (CLTU)                   reference [2]
+-- communications service                                         subsection 1.6.1.6.2
+-- confirmed operation                                            subsection 1.6.1.6.3
+-- flow control                                                   reference [7]
+-- Forward CLTU service                                           reference [1]
+-- idle sequence                                                  reference [2]
+-- initiator                                                      subsection 1.6.1.6.4
+-- invocation                                                     subsection 1.6.1.6.5
+-- invoker                                                        reference [1]
+-- Mission Data Operation System (MDOS)                           reference [1]
+-- Mission User Entity (MUE)                                      reference [1]
+-- object identifier                                              reference [6]
+-- offline delivery mode                                          reference [1]
+-- CCSDS 912.1-B-3                           Page D-1                                  July 2010
+--                           CCSDS HISTORICAL DOCUMENT
+--                                 CCSDS HISTORICAL DOCUMENT
+--                 CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- Term                                                  Reference
+-- online delivery mode                                  reference [1]
+-- Open System Interconnection (OSI)                     reference [7]
+-- operation                                             reference [1]
+-- parameter                                             subsection 1.6.1.6.6
+-- performance                                           subsection 1.6.1.6.7
+-- performer                                             reference [1]
+-- physical channel                                      reference [1]
+-- Physical Layer Operations Procedure (PLOP)            reference [2]
+-- port identifier                                       subsection 1.6.1.6.8
+-- real system                                           reference [7]
+-- responder                                             subsection 1.6.1.6.9
+-- return                                                subsection 1.6.1.6.10
+-- Service Access Point (SAP)                            reference [7]
+-- service instance provision period                     subsection 1.6.1.6.11
+-- service provider (provider)                           reference [1]
+-- service user (user)                                   reference [1]
+-- SLE Complex                                           reference [1]
+-- SLE Complex Management                                reference [1]
+-- SLE data channel                                      reference [1]
+-- SLE functional group (SLE-FG)                         reference [1]
+-- SLE protocol data unit (SLE-PDU)                      reference [1]
+-- SLE service data unit (SLE-SDU)                       reference [1]
+-- SLE service package                                   reference [1]
+-- SLE transfer service instance                         reference [1]
+-- SLE transfer service production                       reference [1]
+-- SLE transfer service provision                        reference [1]
+-- SLE Utilization Management                            reference [1]
+-- space link                                            reference [1]
+-- space link data channel                               reference [1]
+-- space link data unit (SL-DU)                          reference [1]
+-- space link session                                    reference [1]
+-- unconfirmed operation                                 subsection 1.6.1.6.12
+-- CCSDS 912.1-B-3                            Page D-2                         July 2010
+--                                 CCSDS HISTORICAL DOCUMENT
+--                         CCSDS HISTORICAL DOCUMENT
+--              CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                        ANNEX E
+--                                      ACRONYMS
+--                                   (INFORMATIVE)
+-- This annex expands the acronyms used throughout this Recommended Standard.
+-- ASN.1                Abstract Syntax Notation One
+-- C                    Conditional
+-- CCSDS                Consultative Committee for Space Data Systems
+-- CDS                  CCSDS Day Segmented (time code)
+-- CLCW                 Communications Link Control Word
+-- CLTU                 Communications Link Transmission Unit
+-- CLTU-                Forward CLTU service (operation prefix)
+-- CMM                  Carrier Modulation Mode
+-- COP                  Communications Operation Procedure
+-- FG                   Functional Group
+-- FWD                  Forward
+-- IEC                  International Electrotechnical Commission
+-- IP                   Internet Protocol
+-- ISO                  International Organization for Standardization
+-- M                    Mandatory
+-- MDOS                 Mission Data Operation System
+-- M-P                  Management Provider Service Port
+-- M-U                  Management User Service Port
+-- MUE                  Mission User Entity
+-- OCF                  Operational Control Field
+-- CCSDS 912.1-B-3                           Page E-1                         July 2010
+--                         CCSDS HISTORICAL DOCUMENT
+--                          CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- OSI                Open System Interconnection
+-- PDU                Protocol Data Unit
+-- PLOP               Physical Layer Operations Procedure
+-- RF                 Radio Frequency
+-- SAP                Service Access Point
+-- SDU                Service Data Unit
+-- SL-DU              Space Link Data Unit
+-- SLE                Space Link Extension
+-- SLE-FG             SLE Functional Group
+-- SLE-PDU            SLE Protocol Data Unit
+-- SLE-SDU            SLE Service Data Unit
+-- TC                 Telecommand
+-- TCM                Terminology, Conventions and Methodology
+-- TCP                Transmission Control Protocol
+-- T-P                Transfer Provider Service Port
+-- T-U                Transfer User Service Port
+-- UTC                Universal Time Coordinated
+-- WAN                Wide Area Network
+-- CCSDS 912.1-B-3                        Page E-2              July 2010
+--                          CCSDS HISTORICAL DOCUMENT
+--                           CCSDS HISTORICAL DOCUMENT
+--                CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                           ANNEX F
+--                             THROW EVENT DEFINITIONS
+--                                      (INFORMATIVE)
+-- This annex provides several examples of event-identification and event-
+-- qualifier for the CLTU-THROW-EVENT operation. These examples are non-binding
+-- on implementations of the SLE Forward CLTU Service system; however, they may serve as
+-- models for implementations when the matching functionality is supplied.
+-- In the following table the event-qualifier Contents column defines the string passed in the
+-- event-qualifier parameter. Values such as ‘on’ and ‘mi’ are literal. Values such as
+-- <BR> represent an alphanumeric quantity. At least one white space must separate values in
+-- the event-qualifier string.
+--                              Table F-1: Throw Event Examples
+--                event-
+--            identification         event-qualifier
+--                                                                Event Description
+--             Name         ID     Contents [Range]
+--          Set Mod          1   on|off                   Enable or disable command
+--                                                        modulation of the carrier. See
+--                                                        NOTE 1.
+--          Change Rate      2   br <BR> [7.8125 –        Change bit rate to new bit rate
+--                               4000.0]                  defined by <BR> (requested new
+--                                                        bit rate is the value of <BR> in
+--                                                        bits/second). See NOTE 2.
+--          Change           3   mi <MI> [1 – 1570]       Change modulation index to new
+--          Index                                         modulation index angle defined
+--                                                        by <MI> (requested new
+--                                                        modulation index is the value of
+--                                                        <MI> in milli-radians). See NOTE
+--                                                        2.
+--          Change           4   br <BR> mi <MI>          Change both bit rate and
+--          Rate/Index                                    modulation index as described
+--                                                        above. See NOTE 2.
+-- NOTES
+-- 1       The following condition is required for the Set Mod event with the event-
+--         qualifier parameter value set to ‘on’: production status must be operational.
+--         If this condition is not met, CLTU-ASYNC-NOTIFY is invoked with the
+--         notification-type ‘event condition evaluated to false’.
+-- CCSDS 912.1-B-3                             Page F-1                                    July 2010
+--                           CCSDS HISTORICAL DOCUMENT
+--                           CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+-- 2    The following conditions are required for the Change Rate, Change Index, and
+--      Change Rate/Index events: no CLTUs may currently be radiating, and the CLTU
+--      buffer must be empty. If these conditions are not met, CLTU-ASYNC-NOTIFY is
+--      invoked with the notification-type ‘event condition evaluated to false’.
+-- CCSDS 912.1-B-3                          Page F-2                             July 2010
+--                           CCSDS HISTORICAL DOCUMENT
+--                        CCSDS HISTORICAL DOCUMENT
+--             CCSDS RECOMMENDED STANDARD FOR SLE FCLTU SERVICE
+--                                     ANNEX G
+--                         INFORMATIVE REFERENCES
+--                                 (INFORMATIVE)
+-- [G1] Procedures Manual for the Consultative Committee for Space Data Systems. CCSDS
+--      A00.0-Y-9. Yellow Book. Issue 9. Washington, D.C.: CCSDS, November 2003.
+-- [G2] Telecommand Summary of Concept and Rationale. Report Concerning Space Data
+--      System Standards, CCSDS 200.0-G-6. Green Book. Issue 6. Washington, D.C.:
+--      CCSDS, January 1987.
+-- [G3] Cross Support Concept — Part 1: Space Link Extension Services. Report Concerning
+--      Space Data System Standards, CCSDS 910.3-G-3. Green Book. Issue 3. Washington,
+--      D.C.: CCSDS, March 2006.
+-- [G4]  Telecommand Part 1—Channel Service. Recommendation for Space Data System
+--       Standards, CCSDS 201.0-B-3-S.         Historical Recommendation.     Issue 3-S.
+--       Washington, D.C.: CCSDS, (June 2000) August 2005.
+-- [G5]  Telecommand Part 2—Data Routing Service. Recommendation for Space Data
+--       System Standards, CCSDS 202.0-B-3-S. Historical Recommendation. Issue 3-S.
+--       Washington, D.C.: CCSDS, (June 2001) August 2005.
+-- [G6]  Telecommand Part 2.1—Command Operation Procedures. Recommendation for
+--       Space Data System Standards, CCSDS 202.1-B-2-S. Historical Recommendation.
+--       Issue 2-S. Washington, D.C.: CCSDS, (June 2001) August 2005.
+-- [G7]  Telecommand Part 3—Data Management Service. Recommendation for Space Data
+--       System Standards, CCSDS 203.0-B-2-S. Historical Recommendation. Issue 2-S.
+--       Washington, D.C.: CCSDS, (June 2001) August 2005.
+-- [G8] Space Link Extension—Internet Protocol for Transfer Services. Recommendation for
+--      Space Data System Standards, CCSDS 913.1-B-1. Blue Book. Issue 1. Washington,
+--      D.C.: CCSDS, September 2008.

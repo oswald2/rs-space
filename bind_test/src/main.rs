@@ -4,7 +4,7 @@ use rs_space_sle::common::*;
 use rasn::types::*;
 use rasn::ber::de::Error;
 
-use rs_space_sle::bind::SleBindInvocation;
+use rs_space_sle::asn1::*;
 
 fn main() {
     let bind_enc: Vec<u8> = vec![
