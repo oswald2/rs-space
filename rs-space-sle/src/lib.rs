@@ -5,4 +5,4 @@ pub mod sle_client;
 
 pub mod common;
 pub mod bind;
-pub mod asn1;
+pub mod asn1_2;

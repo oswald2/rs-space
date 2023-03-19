@@ -431,31 +431,11 @@ ServiceNames ATTRIBUTE   ::=
 | tcfService
 | tcvaService
 }
--- +++++++++++++++++++++++++++++++++++++
--- CLTU Service Definition
--- The cltu Service Id starts with "cltu" and is
--- followed by the instance number.
 cltuService ATTRIBUTE       ::=   { ID cltu }
--- +++++++++++++++++++++++++++++++++++++
--- Forward Service Definition
 forwardService ATTRIBUTE    ::=   { ID fsl-fg     }
--- +++++++++++++++++++++++++++++++++++++
--- FSP Service Definition
--- The fsp Service Id starts with "fsp" and is
--- followed by the instance number.
-fspService ATTRIBUTE        ::=   { ID fsp     }
--- +++++++++++++++++++++++++++++++++++++
--- RAF Service Definition
--- The raf Service Id starts with "onlc" or "onlt" or "offl" and is
--- followed by the instance number.
 rafService ATTRIBUTE        ::=   { ID raf     }
+rcfService ATTRIBUTE       ::=   { ID rcf    }
 
-
--- -- +++++++++++++++++++++++++++++++++++++
--- -- RCF Service Definition
--- -- The rcf Service Id starts with "onlc" or "onlt" or "offl" and is
--- -- followed by the instance number.
--- rcfService ATTRIBUTE       ::=   { ID rcf    }
 -- -- +++++++++++++++++++++++++++++++++++++
 -- -- RCFSH Service Definition
 -- -- The rcfsh Service Id starts with "onlc" or "onlt" or "offl" and is
