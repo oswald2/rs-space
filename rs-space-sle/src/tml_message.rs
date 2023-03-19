@@ -45,6 +45,14 @@ impl TMLMessage {
         }
     }
 
+    pub fn new_with_data(data: Vec<u8>) -> TMLMessage {
+        TMLMessage {
+            msg_type: TMLMessageType::SlePduMessage,
+            length: 0,
+            data: data
+        }
+    }
+
     pub fn new_with_len(t: TMLMessageType, len: usize) -> TMLMessage {
         let mut v = Vec::with_capacity(len);
         v.resize(len, 0);
@@ -87,7 +95,7 @@ impl TMLMessage {
 
             // skip the next 3 bytes
             let mut dummy = [0,0,0];
-            reader.read(&mut dummy[0..]).await?;
+            reader.read(&mut dummy[..]).await?;
 
             // read in the length
             self.length = reader.read_u32().await?;
@@ -102,6 +110,30 @@ impl TMLMessage {
             return Err(Error::new(ErrorKind::InvalidInput, msg))
         }
     }
+
+    pub async fn async_read<T: AsyncReadExt + Unpin>(reader: &mut T) -> Result<TMLMessage, Error> {
+        let mut buf = [0, 0, 0, 0];
+        let _ = reader.read_exact(&mut buf[..]).await?;
+
+        if let Ok(t1) = TMLMessageType::try_from(buf[0]) {
+            // read in the length
+            let length = reader.read_u32().await?;
+    
+            // now read in the data 
+            let mut data = vec![0; length as usize];
+            reader.read_exact(&mut data[..]).await?;
+            Ok(TMLMessage{
+                msg_type: t1,
+                length: length,
+                data: data 
+            })
+        }    
+        else  {
+            let msg = format!("TML Message: invalid message type {}", buf[0]);
+            return Err(Error::new(ErrorKind::InvalidInput, msg))
+        }
+    }
+
 
     pub async fn write_to_async<T: AsyncWriteExt + Unpin>(&self, writer: &mut T) -> Result<(), Error> {
         writer.write_u8(self.msg_type as u8).await?;

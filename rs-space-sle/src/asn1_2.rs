@@ -1,3 +1,6 @@
+use std::collections::BTreeSet;
+
+use log::info;
 use rasn::{types::*, AsnType, Decode, Encode};
 
 // ASN1 common types
@@ -147,22 +150,38 @@ pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;
 
 #[derive(AsnType, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct ServiceInstanceAttributeInner {
-    identifier: ObjectIdentifier,
-    si_attribute_value: VisibleString,
+    pub identifier: ObjectIdentifier,
+    pub si_attribute_value: VisibleString,
 }
 
 pub type ServiceInstanceAttribute = SetOf<ServiceInstanceAttributeInner>;
 
-pub const SAGR: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 52]);
-pub const SPACK: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 53]);
-pub const FSL_FG: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 14]);
-pub const RSL_FG: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 38]);
-pub const CLTU: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 7]);
-pub const FSP: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 10]);
-pub const RAF: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 22]);
-pub const RCF: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 46]);
-pub const RCFSH: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 44]);
-pub const ROCF: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 49]);
-pub const RSP: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 40]);
-pub const TCF: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 12]);
-pub const TCVA: ConstOid = ConstOid(&[3, 112, 4, 3, 1, 2, 16]);
+pub fn new_service_instannce_attribute(
+    id: &ConstOid,
+    value: &str,
+) -> ServiceInstanceAttribute {
+    let mut tree = BTreeSet::new();
+
+    info!("OID: {:?}", id);
+    info!("OID: {:?}", id.0);
+
+    tree.insert(ServiceInstanceAttributeInner {
+        identifier: ObjectIdentifier::new_unchecked(std::borrow::Cow::Borrowed(id.0)),
+        si_attribute_value: Implicit::new(String::from(value)),
+    });
+    tree
+}
+
+pub const SAGR: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 52]);
+pub const SPACK: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 53]);
+pub const FSL_FG: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 14]);
+pub const RSL_FG: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 38]);
+pub const CLTU: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 7]);
+pub const FSP: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 10]);
+pub const RAF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 22]);
+pub const RCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 46]);
+pub const RCFSH: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 44]);
+pub const ROCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 49]);
+pub const RSP: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 40]);
+pub const TCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 12]);
+pub const TCVA: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 16]);

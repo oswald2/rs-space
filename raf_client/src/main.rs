@@ -51,6 +51,7 @@ async fn main() -> Result<(), Error> {
     // Now start the whole processing
     info!("RAF Client started");
 
-    run_app(args.address).await
+    run_app(args.address).await?;
+    Ok(())
 }
 

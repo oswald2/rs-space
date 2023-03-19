@@ -17,3 +17,4 @@ num-traits = "0.2.15"
 num-derive = "0.3"
 num = "0.4"
 rs-space-core = { path = "../rs-space-core" }
+log = "0.4"

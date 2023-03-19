@@ -17,7 +17,7 @@ pub struct TMLConfig {
 }
 
 impl TMLConfig {
-    async fn read_from_file(filename: &Path) -> Result<TMLConfig, Error> {
+    pub async fn read_from_file(filename: &Path) -> Result<TMLConfig, Error> {
         let content = read_to_string(filename).await?;
 
         match serde_yaml::from_str(&content) {
@@ -26,7 +26,7 @@ impl TMLConfig {
         }
     }
 
-    async fn write_to_file(filename: &Path, cfg: &TMLConfig) -> Result<(), Error> {
+    pub async fn write_to_file(filename: &Path, cfg: &TMLConfig) -> Result<(), Error> {
         match serde_yaml::to_string(cfg) {
             Err(err)=> return Err(Error::new(ErrorKind::Other, format!("{}", err))),
             Ok(yaml) => {

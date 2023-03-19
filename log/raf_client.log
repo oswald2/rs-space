@@ -1,0 +1,69 @@
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+ERROR - Error encoding SLE message: Error encoding PDU to ASN1: `OBJECT IDENTIFIER` must have at least two components.
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "sagr" } }}] }
+ERROR - Error encoding SLE message: Error encoding PDU to ASN1: `OBJECT IDENTIFIER` must have at least two components.
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+ERROR - Error encoding SLE message: Error encoding PDU to ASN1: `OBJECT IDENTIFIER` must have at least two components.
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+ERROR - Error encoding SLE message: Error encoding PDU to ASN1: `OBJECT IDENTIFIER` must have at least two components.
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - OID: ConstOid([3, 112, 4, 3, 1, 2, 52])
+INFO - OID: [3, 112, 4, 3, 1, 2, 52]
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - OID: ConstOid([3, 112, 4, 3, 1, 2, 52])
+INFO - OID: [3, 112, 4, 3, 1, 2, 52]
+INFO - OID: ConstOid([3, 112, 4, 3, 1, 2, 53])
+INFO - OID: [3, 112, 4, 3, 1, 2, 53]
+INFO - OID: ConstOid([3, 112, 4, 3, 1, 2, 38])
+INFO - OID: [3, 112, 4, 3, 1, 2, 38]
+INFO - OID: ConstOid([3, 112, 4, 3, 1, 2, 22])
+INFO - OID: [3, 112, 4, 3, 1, 2, 22]
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+ERROR - Error encoding SLE message: Error encoding PDU to ASN1: `OBJECT IDENTIFIER` must have at least two components.
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 52])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 52]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 53])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 53]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 38])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 38]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 22])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 22]
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 52])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 52]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 53])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 53]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 38])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 38]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 22])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 22]
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+INFO - Received TML Message: TMLMessage { msg_type: SlePduMessage, length: 19, data: [191, 101, 16, 128, 0, 26, 9, 80, 65, 82, 65, 71, 79, 78, 84, 84, 128, 1, 4] }
+INFO - RAF Client started
+INFO - Connecting to localhost:5100...
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 52])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 52]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 53])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 53]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 38])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 38]
+INFO - OID: ConstOid([1, 3, 112, 4, 3, 1, 2, 22])
+INFO - OID: [1, 3, 112, 4, 3, 1, 2, 22]
+INFO - Sending BIND invocation: SleBindInvocation { invoker_credentials: Unused, initiator_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "SLETT" }, responder_port_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "TMPORT" }, service_type: 0, version_number: 4, service_instance_identifier: [{ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 52]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "3" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 53]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "facility-PASS1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 38]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "1" } }}, {ServiceInstanceAttributeInner { identifier: ObjectIdentifier([1, 3, 112, 4, 3, 1, 2, 22]), si_attribute_value: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "onlc1" } }}] }
+INFO - Received TML Message: TMLMessage { msg_type: SlePduMessage, length: 19, data: [191, 101, 16, 128, 0, 26, 9, 80, 65, 82, 65, 71, 79, 78, 84, 84, 128, 1, 4] }
+INFO - Received: Ok(SleBindReturn { performer_credentials: Unused, responder_identifier: Implicit { _tag: PhantomData<rasn::types::tag::consts::VISIBLE_STRING>, value: "PARAGONTT" }, result: BindOK(4) })
