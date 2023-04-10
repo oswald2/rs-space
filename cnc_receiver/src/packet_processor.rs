@@ -1,3 +1,5 @@
+#[allow(unused)]
+
 use log::{debug, error, info, LevelFilter};
 
 use tokio::io::{Error, ErrorKind};

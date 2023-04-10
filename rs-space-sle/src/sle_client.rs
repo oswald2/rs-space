@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::time::Duration;
 
 use tokio::io::{AsyncWriteExt, BufStream, Error};
@@ -5,25 +6,23 @@ use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc::{channel, Sender};
 
-use crate::asn1_2::{SleBindInvocation, SleBindReturn};
-use crate::pdu::PDU;
+use crate::asn1_raf::{SlePdu};
+// use crate::pdu::PDU;
 use crate::tml_config::TMLConfig;
 use crate::tml_message::TMLMessage;
 use log::{error, info};
 
 const QUEUE_SIZE: usize = 500;
 
-pub enum SleMsg {
-    SlePDU(PDU),
-}
+pub struct SleMsg(SlePdu);
 
 pub struct SleClientHandle {
     chan: Sender<SleMsg>,
 }
 
 impl SleClientHandle {
-    pub async fn send_pdu(&mut self, pdu: PDU) -> Result<(), String> {
-        if let Err(err) = self.chan.send(SleMsg::SlePDU(pdu)).await {
+    pub async fn send_pdu(&mut self, pdu: SlePdu) -> Result<(), String> {
+        if let Err(err) = self.chan.send(SleMsg(pdu)).await {
             return Err(format!("Could not send PDU: {}", err));
         }
         Ok(())
@@ -92,22 +91,23 @@ pub async fn sle_connect(address: &str, cfg: &TMLConfig) -> Result<SleClientHand
 
 fn process_sle_msg(msg: SleMsg) -> Result<TMLMessage, String> {
     match msg {
-        SleMsg::SlePDU(pdu) => match process_sle_pdu(pdu) {
+        SleMsg(pdu) => match process_sle_pdu(pdu) {
             Err(err) => Err(format!("Error encoding PDU to ASN1: {}", err)),
             Ok(val) => Ok(TMLMessage::new_with_data(val)),
         },
     }
 }
 
-fn process_sle_pdu(pdu: PDU) -> Result<Vec<u8>, rasn::ber::enc::Error> {
-    match pdu {
-        PDU::SlePduBind(bind) => rasn::der::encode(&bind),
-        PDU::SlePduBindReturn(ret) => rasn::der::encode(&ret),
-    }
+fn process_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
+    // match pdu {
+    //     SlePdu::SlePduBind(bind) => rasn::der::encode(&bind),
+    //     SlePdu::SlePduBindReturn(ret) => rasn::der::encode(&ret),
+    // }
+    rasn::der::encode(&pdu)
 }
 
 fn parse_sle_message(msg: &TMLMessage) {
-    let res: Result<SleBindReturn, _> = rasn::der::decode(&msg.data[..]);
+    let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
     info!("Received: {:?}", res);
 }

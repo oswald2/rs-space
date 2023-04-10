@@ -1,3 +1,5 @@
+#[allow(unused)]
+
 use rs_space_core::ccsds_packet::FastCcsdsPacket;
 
 pub mod packet_processor;

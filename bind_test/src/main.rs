@@ -1,9 +1,6 @@
-use rs_space_sle::common::*;
-
 use rasn::ber::de::Error;
-use rasn::types::*;
 
-use rs_space_sle::asn1_2::*;
+use rs_space_sle::asn1_raf::*;
 
 fn main() {
     let bind_enc: Vec<u8> = vec![
@@ -25,18 +22,18 @@ fn main() {
     let unbind: Vec<u8> = vec![191, 102, 5, 128, 0, 2, 1, 0];
     let unbind_ret: Vec<u8> = vec![191, 103, 4, 128, 0, 128, 0];
 
-    let res: Result<SleBindInvocation, Error> = rasn::der::decode(&bind_enc[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_enc[..]);
     println!("Bind Result: {:?}", res);
 
-    let res: Result<SleBindReturn, Error> = rasn::der::decode(&bind_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_ret[..]);
     println!("Bind Return Result: {:?}", res);
 
-    let res: Result<SleBindReturn, Error> = rasn::der::decode(&bind_neg_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_neg_ret[..]);
     println!("Bind Negative Return Result: {:?}", res);
 
-    let res: Result<SleUnbindInvocation, Error> = rasn::der::decode(&unbind[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind[..]);
     println!("Unbind Result: {:?}", res);
 
-    let res: Result<SleUnbindReturn, Error> = rasn::der::decode(&unbind_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind_ret[..]);
     println!("Unbind Return Result: {:?}", res);
 }

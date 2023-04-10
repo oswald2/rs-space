@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::path::Path;
 
 use tokio::io::{Error, ErrorKind};

@@ -1,3 +1,4 @@
+#[allow(unused)]
 use byteorder::{BigEndian, WriteBytesExt};
 
 use std::io::{Cursor, Write};

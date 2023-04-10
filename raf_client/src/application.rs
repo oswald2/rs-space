@@ -1,11 +1,11 @@
+#[allow(unused)]
 use std::collections::BTreeSet;
 
 use rasn::types::{Implicit, Integer, VisibleString};
-use rs_space_sle::asn1_2::{
+use rs_space_sle::asn1_raf::{
     new_service_instannce_attribute, ApplicationIdentifier, Credentials, ServiceInstanceAttribute,
-    ServiceInstanceAttributeInner, SleBindInvocation,
+    ServiceInstanceAttributeInner, SlePdu,
 };
-use rs_space_sle::pdu::PDU;
 use tokio::io::{BufStream, Error, ErrorKind};
 
 use log::{error, info};
@@ -28,24 +28,24 @@ pub async fn run_app(address: String) -> Result<(), Error> {
 
     let mut handle = sle_connect(&address, &DEFAULT_CONFIG).await?;
 
-    let bind = SleBindInvocation {
+    let bind = SlePdu::SleBindInvocation {
         invoker_credentials: Credentials::Unused,
         initiator_identifier: VisibleString::new(rasn::types::Utf8String::from("SLETT")),
         responder_port_identifier: VisibleString::new(rasn::types::Utf8String::from("TMPORT")),
         service_type: Integer::from(ApplicationIdentifier::RtnAllFrames as u8),
         version_number: 4,
         service_instance_identifier: vec![
-            new_service_instannce_attribute(&rs_space_sle::asn1_2::SAGR, "3"),
-            new_service_instannce_attribute(&rs_space_sle::asn1_2::SPACK, "facility-PASS1"),
-            new_service_instannce_attribute(&rs_space_sle::asn1_2::RSL_FG, "1"),
-            new_service_instannce_attribute(&rs_space_sle::asn1_2::RAF, "onlc1"),
+            new_service_instannce_attribute(&rs_space_sle::asn1_raf::SAGR, "3"),
+            new_service_instannce_attribute(&rs_space_sle::asn1_raf::SPACK, "facility-PASS1"),
+            new_service_instannce_attribute(&rs_space_sle::asn1_raf::RSL_FG, "1"),
+            new_service_instannce_attribute(&rs_space_sle::asn1_raf::RAF, "onlc1"),
         ],
     };
     // sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1"
 
     info!("Sending BIND invocation: {:?}", bind);
 
-    if let Err(err) = handle.send_pdu(PDU::SlePduBind(bind)).await {
+    if let Err(err) = handle.send_pdu(bind).await {
         error!("Error sending PDU: {}", err);
     }
 

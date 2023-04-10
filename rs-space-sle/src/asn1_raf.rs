@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::collections::BTreeSet;
 
 use log::info;
@@ -101,14 +102,34 @@ pub enum UnbindReason {
 pub type VersionNumber = IntPosShort;
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
-#[rasn(tag(context, 100))]
-pub struct SleBindInvocation {
-    pub invoker_credentials: Credentials,
-    pub initiator_identifier: AuthorityIdentifier,
-    pub responder_port_identifier: PortId,
-    pub service_type: Integer,
-    pub version_number: VersionNumber,
-    pub service_instance_identifier: ServiceInstanceIdentifier,
+#[rasn(choice)]
+pub enum SlePdu {
+    #[rasn(tag(context, 100))]
+    SleBindInvocation {
+        invoker_credentials: Credentials,
+        initiator_identifier: AuthorityIdentifier,
+        responder_port_identifier: PortId,
+        service_type: Integer,
+        version_number: VersionNumber,
+        service_instance_identifier: ServiceInstanceIdentifier,
+    },
+    #[rasn(tag(context, 101))]
+    SleBindReturn {
+        performer_credentials: Credentials,
+        responder_identifier: AuthorityIdentifier,
+        result: BindResult,
+    },
+    #[rasn(tag(context, 102))]
+    SleUnbindInvocation {
+        invoker_credentials: Credentials,
+        unbind_reason: Integer,
+    },    
+    #[rasn(tag(context, 103))]
+    SleUnbindReturn {
+        responder_credentials: Credentials,
+        #[rasn(tag(context, 0))]
+        result: (),
+    }
 }
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
@@ -120,30 +141,7 @@ pub enum BindResult {
     BindDiag(BindDiagnostic),
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
-#[rasn(tag(context, 101))]
-pub struct SleBindReturn {
-    pub performer_credentials: Credentials,
-    pub responder_identifier: AuthorityIdentifier,
-    pub result: BindResult,
-}
-
 pub type SlePeerAbort = PeerAbortDiagnostic;
-
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
-#[rasn(tag(context, 102))]
-pub struct SleUnbindInvocation {
-    pub invoker_credentials: Credentials,
-    pub unbind_reason: Integer,
-}
-
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
-#[rasn(tag(context, 103))]
-pub struct SleUnbindReturn {
-    pub responder_credentials: Credentials,
-    #[rasn(tag(context, 0))]
-    pub result: (),
-}
 
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;
@@ -156,15 +154,8 @@ pub struct ServiceInstanceAttributeInner {
 
 pub type ServiceInstanceAttribute = SetOf<ServiceInstanceAttributeInner>;
 
-pub fn new_service_instannce_attribute(
-    id: &ConstOid,
-    value: &str,
-) -> ServiceInstanceAttribute {
+pub fn new_service_instannce_attribute(id: &ConstOid, value: &str) -> ServiceInstanceAttribute {
     let mut tree = BTreeSet::new();
-
-    info!("OID: {:?}", id);
-    info!("OID: {:?}", id.0);
-
     tree.insert(ServiceInstanceAttributeInner {
         identifier: ObjectIdentifier::new_unchecked(std::borrow::Cow::Borrowed(id.0)),
         si_attribute_value: Implicit::new(String::from(value)),
