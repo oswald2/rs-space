@@ -1,11 +1,14 @@
 #[allow(unused)]
+
+use std::fs::read_to_string;
 use std::path::Path;
 
+use rs_space_sle::user_config::UserConfig;
 use tokio::io::{Error, ErrorKind};
 
 use rustop::opts;
 
-use log::{info, LevelFilter};
+use log::{error, info, LevelFilter};
 use log4rs::append::{console::ConsoleAppender, console::Target, file::FileAppender};
 use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
@@ -14,13 +17,10 @@ mod application;
 
 use crate::application::run_app;
 
-
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let (args, _rest) = opts! {
         synopsis "RAF SLE test client";
-        opt address:String, desc: "Specifiy a hostname:port to connect to";
         opt config:Option<String>, desc: "Load config from the given file.";
     }
     .parse_or_exit();
@@ -49,10 +49,21 @@ async fn main() -> Result<(), Error> {
         Ok(_) => {}
     }
 
+    // if specified, load the config
+    let config: UserConfig = match args.config {
+        Some(path) => match UserConfig::read_from_file(Path::new(&path)).await {
+            Ok(cfg) => cfg,
+            Err(err) => {
+                error!("Error loading config from file {}: {}", path, err);
+                UserConfig::default()
+            }
+        },
+        None => UserConfig::default(),
+    };
+
     // Now start the whole processing
     info!("RAF Client started");
 
-    run_app(args.address).await?;
+    run_app(&config).await?;
     Ok(())
 }
-

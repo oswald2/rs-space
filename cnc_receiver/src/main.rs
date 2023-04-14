@@ -8,7 +8,7 @@ use tokio::io::BufReader;
 use tokio::io::{Error, ErrorKind};
 use tokio::net::{TcpListener, TcpStream};
 
-use log::{debug, error, info, LevelFilter};
+use log::{error, info, LevelFilter};
 use log4rs::append::{console::ConsoleAppender, console::Target, file::FileAppender};
 use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;

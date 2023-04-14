@@ -1,7 +1,6 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use log::info;
 use rasn::{types::*, AsnType, Decode, Encode};
 
 // ASN1 common types
@@ -123,13 +122,13 @@ pub enum SlePdu {
     SleUnbindInvocation {
         invoker_credentials: Credentials,
         unbind_reason: Integer,
-    },    
+    },
     #[rasn(tag(context, 103))]
     SleUnbindReturn {
         responder_credentials: Credentials,
         #[rasn(tag(context, 0))]
         result: (),
-    }
+    },
 }
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
@@ -146,11 +145,30 @@ pub type SlePeerAbort = PeerAbortDiagnostic;
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;
 
+// impl TryFrom<String> for ServiceInstanceIdentifier {
+//     type Error = String;
+
+//     fn try_from(value: String) -> Result<Self, Self::Error> {
+//         Err("not yet implemented".to_string())
+//     }
+// }
+
 #[derive(AsnType, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct ServiceInstanceAttributeInner {
     pub identifier: ObjectIdentifier,
     pub si_attribute_value: VisibleString,
 }
+
+// impl TryInto<String> for ServiceInstanceAttributeInner {
+//     type Error = String; 
+
+//     fn try_into(self) -> Result<String, Self::Error> {
+//         let id = service_oid_to_string(self.identifier.from())?;
+
+//         let result = format!("{}={}", id, self.si_attribute_value);
+//         Ok(result)
+//     }
+// }
 
 pub type ServiceInstanceAttribute = SetOf<ServiceInstanceAttributeInner>;
 
@@ -176,3 +194,22 @@ pub const ROCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 49]);
 pub const RSP: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 40]);
 pub const TCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 12]);
 pub const TCVA: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 16]);
+
+pub fn service_oid_to_string(oid: ConstOid) -> Result<String, String> {
+    match oid {
+        SAGR => Ok("sagr".to_owned()),
+        SPACK => Ok("spack".to_owned()),
+        FSL_FG => Ok("spack".to_owned()),
+        RSL_FG => Ok("spack".to_owned()),
+        CLTU => Ok("spack".to_owned()),
+        FSP => Ok("spack".to_owned()),
+        RAF => Ok("spack".to_owned()),
+        RCF => Ok("spack".to_owned()),
+        RCFSH => Ok("spack".to_owned()),
+        ROCF => Ok("spack".to_owned()),
+        RSP => Ok("spack".to_owned()),
+        TCF => Ok("spack".to_owned()),
+        TCVA => Ok("spack".to_owned()),
+        x => Err(format!("Could not parse OID for service attribute: {:?}", x)),
+    }
+}

@@ -1,12 +1,14 @@
 #[allow(unused)]
 use std::time::Duration;
 
-use tokio::io::{AsyncWriteExt, BufStream, Error};
+use tokio::io::{BufStream, Error};
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc::{channel, Sender};
+use tokio::task::JoinHandle;
 
 use crate::asn1_raf::{SlePdu};
+use crate::raf_config::RAFConfig;
 // use crate::pdu::PDU;
 use crate::tml_config::TMLConfig;
 use crate::tml_message::TMLMessage;
@@ -18,6 +20,7 @@ pub struct SleMsg(SlePdu);
 
 pub struct SleClientHandle {
     chan: Sender<SleMsg>,
+    thread: JoinHandle<()>
 }
 
 impl SleClientHandle {
@@ -29,7 +32,9 @@ impl SleClientHandle {
     }
 }
 
-pub async fn sle_connect(address: &str, cfg: &TMLConfig) -> Result<SleClientHandle, Error> {
+pub async fn sle_connect_raf(cfg: &TMLConfig, raf_config: &RAFConfig) -> Result<SleClientHandle, Error> {
+    let address = format!("{}:{}", raf_config.hostname, raf_config.port);
+
     let sock = TcpStream::connect(address).await?;
     let mut stream = BufStream::new(sock);
 
@@ -41,7 +46,7 @@ pub async fn sle_connect(address: &str, cfg: &TMLConfig) -> Result<SleClientHand
 
     let timeout = cfg.heartbeat;
 
-    tokio::spawn(async move {
+    let hdl = tokio::spawn(async move {
         loop {
             select! {
                     res = receiver.recv() => {
@@ -84,7 +89,7 @@ pub async fn sle_connect(address: &str, cfg: &TMLConfig) -> Result<SleClientHand
         }
     });
 
-    let ret = SleClientHandle { chan: sender };
+    let ret = SleClientHandle { chan: sender, thread: hdl };
 
     Ok(ret)
 }
@@ -99,10 +104,6 @@ fn process_sle_msg(msg: SleMsg) -> Result<TMLMessage, String> {
 }
 
 fn process_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
-    // match pdu {
-    //     SlePdu::SlePduBind(bind) => rasn::der::encode(&bind),
-    //     SlePdu::SlePduBindReturn(ret) => rasn::der::encode(&ret),
-    // }
     rasn::der::encode(&pdu)
 }
 
