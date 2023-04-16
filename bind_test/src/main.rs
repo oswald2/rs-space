@@ -36,4 +36,15 @@ fn main() {
 
     let res: Result<SlePdu, Error> = rasn::der::decode(&unbind_ret[..]);
     println!("Unbind Return Result: {:?}", res);
+
+    let sii_attr = vec![
+        new_service_instance_attribute(&rs_space_sle::asn1_raf::SAGR, "3"),
+        new_service_instance_attribute(&rs_space_sle::asn1_raf::SPACK, "facility-PASS1"),
+        new_service_instance_attribute(&rs_space_sle::asn1_raf::RSL_FG, "1"),
+        new_service_instance_attribute(&rs_space_sle::asn1_raf::RAF, "onlc1"),
+    ];
+
+    let formatted_sii = service_instance_identifier_to_string(&sii_attr);
+
+    println!("SII: {:?}\nFormatted: {:?}", sii_attr, formatted_sii);
 }

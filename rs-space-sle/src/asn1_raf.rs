@@ -145,34 +145,15 @@ pub type SlePeerAbort = PeerAbortDiagnostic;
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;
 
-// impl TryFrom<String> for ServiceInstanceIdentifier {
-//     type Error = String;
-
-//     fn try_from(value: String) -> Result<Self, Self::Error> {
-//         Err("not yet implemented".to_string())
-//     }
-// }
-
-#[derive(AsnType, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct ServiceInstanceAttributeInner {
     pub identifier: ObjectIdentifier,
     pub si_attribute_value: VisibleString,
 }
 
-// impl TryInto<String> for ServiceInstanceAttributeInner {
-//     type Error = String; 
-
-//     fn try_into(self) -> Result<String, Self::Error> {
-//         let id = service_oid_to_string(self.identifier.from())?;
-
-//         let result = format!("{}={}", id, self.si_attribute_value);
-//         Ok(result)
-//     }
-// }
-
 pub type ServiceInstanceAttribute = SetOf<ServiceInstanceAttributeInner>;
 
-pub fn new_service_instannce_attribute(id: &ConstOid, value: &str) -> ServiceInstanceAttribute {
+pub fn new_service_instance_attribute(id: &ConstOid, value: &str) -> ServiceInstanceAttribute {
     let mut tree = BTreeSet::new();
     tree.insert(ServiceInstanceAttributeInner {
         identifier: ObjectIdentifier::new_unchecked(std::borrow::Cow::Borrowed(id.0)),
@@ -195,21 +176,40 @@ pub const RSP: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 40]);
 pub const TCF: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 12]);
 pub const TCVA: ConstOid = ConstOid(&[1, 3, 112, 4, 3, 1, 2, 16]);
 
-pub fn service_oid_to_string(oid: ConstOid) -> Result<String, String> {
-    match oid {
-        SAGR => Ok("sagr".to_owned()),
-        SPACK => Ok("spack".to_owned()),
-        FSL_FG => Ok("spack".to_owned()),
-        RSL_FG => Ok("spack".to_owned()),
-        CLTU => Ok("spack".to_owned()),
-        FSP => Ok("spack".to_owned()),
-        RAF => Ok("spack".to_owned()),
-        RCF => Ok("spack".to_owned()),
-        RCFSH => Ok("spack".to_owned()),
-        ROCF => Ok("spack".to_owned()),
-        RSP => Ok("spack".to_owned()),
-        TCF => Ok("spack".to_owned()),
-        TCVA => Ok("spack".to_owned()),
-        x => Err(format!("Could not parse OID for service attribute: {:?}", x)),
+
+
+pub fn service_oid_to_string(oid: &ObjectIdentifier) -> Result<String, String> {
+    match oid.as_ref() {
+        x if x == SAGR.0 => Ok("sagr".to_owned()),
+        x if x == SPACK.0 => Ok("spack".to_owned()),
+        x if x == FSL_FG.0 => Ok("fsl-fg".to_owned()),
+        x if x == RSL_FG.0 => Ok("rsl-fg".to_owned()),
+        x if x == CLTU.0 => Ok("cltu".to_owned()),
+        x if x == FSP.0 => Ok("fsp".to_owned()),
+        x if x == RAF.0 => Ok("raf".to_owned()),
+        x if x == RCF.0 => Ok("rcf".to_owned()),
+        x if x == RCFSH.0 => Ok("rcfsh".to_owned()),
+        x if x == ROCF.0 => Ok("rocf".to_owned()),
+        x if x == RSP.0 => Ok("rsp".to_owned()),
+        x if x == TCF.0 => Ok("tcf".to_owned()),
+        x if x == TCVA.0 => Ok("tcva".to_owned()),
+        x => Err(format!(
+            "Could not parse OID for service attribute: {:?}",
+            x
+        )),
     }
+}
+
+pub fn service_instance_identifier_to_string(
+    si_identifier: &ServiceInstanceIdentifier,
+) -> Result<String, String> {
+    let mut si_strings: Vec<String> = Vec::new();
+
+    for attr in si_identifier.iter().flatten() {
+        let oid_string = service_oid_to_string(&attr.identifier)?;
+        let attr_string = format!("{}={}", oid_string, attr.si_attribute_value.to_string());
+        si_strings.push(attr_string);
+    }
+
+    Ok(si_strings.join("."))
 }

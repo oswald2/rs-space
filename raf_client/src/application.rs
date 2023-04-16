@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use rasn::types::{Integer, VisibleString};
 use rs_space_sle::asn1_raf::{
-    new_service_instannce_attribute, ApplicationIdentifier, Credentials, SlePdu,
+    new_service_instance_attribute, ApplicationIdentifier, Credentials, SlePdu,
 };
 use rs_space_sle::sle_client::sle_connect_raf;
 use rs_space_sle::user_config::UserConfig;
@@ -34,13 +34,13 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
                 service_type: Integer::from(ApplicationIdentifier::RtnAllFrames as u8),
                 version_number: raf_config.version as u16,
                 service_instance_identifier: vec![
-                    new_service_instannce_attribute(&rs_space_sle::asn1_raf::SAGR, "3"),
-                    new_service_instannce_attribute(
+                    new_service_instance_attribute(&rs_space_sle::asn1_raf::SAGR, "3"),
+                    new_service_instance_attribute(
                         &rs_space_sle::asn1_raf::SPACK,
                         "facility-PASS1",
                     ),
-                    new_service_instannce_attribute(&rs_space_sle::asn1_raf::RSL_FG, "1"),
-                    new_service_instannce_attribute(&rs_space_sle::asn1_raf::RAF, "onlc1"),
+                    new_service_instance_attribute(&rs_space_sle::asn1_raf::RSL_FG, "1"),
+                    new_service_instance_attribute(&rs_space_sle::asn1_raf::RAF, "onlc1"),
                 ],
             };
             // sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1"
