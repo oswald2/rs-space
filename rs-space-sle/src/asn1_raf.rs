@@ -207,7 +207,7 @@ pub fn service_instance_identifier_to_string(
 
     for attr in si_identifier.iter().flatten() {
         let oid_string = service_oid_to_string(&attr.identifier)?;
-        let attr_string = format!("{}={}", oid_string, attr.si_attribute_value.to_string());
+        let attr_string = format!("{}={}", oid_string, attr.si_attribute_value.as_str());
         si_strings.push(attr_string);
     }
 
