@@ -1,6 +1,12 @@
 use rasn::ber::de::Error;
 
-use rs_space_sle::asn1_raf::*;
+use rs_space_sle::{
+    asn1_raf::*,
+    types::sle::{
+        new_service_instance_attribute, service_instance_identifier_to_string, RAF, RSL_FG, SAGR,
+        SPACK, string_to_service_instance_id,
+    },
+};
 
 fn main() {
     let bind_enc: Vec<u8> = vec![
@@ -38,13 +44,27 @@ fn main() {
     println!("Unbind Return Result: {:?}", res);
 
     let sii_attr = vec![
-        new_service_instance_attribute(&rs_space_sle::asn1_raf::SAGR, "3"),
-        new_service_instance_attribute(&rs_space_sle::asn1_raf::SPACK, "facility-PASS1"),
-        new_service_instance_attribute(&rs_space_sle::asn1_raf::RSL_FG, "1"),
-        new_service_instance_attribute(&rs_space_sle::asn1_raf::RAF, "onlc1"),
+        new_service_instance_attribute(&SAGR, "3"),
+        new_service_instance_attribute(&SPACK, "facility-PASS1"),
+        new_service_instance_attribute(&RSL_FG, "1"),
+        new_service_instance_attribute(&RAF, "onlc1"),
     ];
 
     let formatted_sii = service_instance_identifier_to_string(&sii_attr);
 
     println!("SII: {:?}\nFormatted: {:?}", sii_attr, formatted_sii);
+
+    //let sii = "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1";
+    let sii1 = "sagr=3";
+    let parsed_sii1 = string_to_service_instance_id(sii1);
+    println!("\nSII Parsing: {:?}", parsed_sii1);
+
+    //let sii = "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1";
+    let sii2 = "sagr=3.spack=facility-PASS1";
+    let parsed_sii2 = string_to_service_instance_id(sii2);
+    println!("\nSII Parsing: {:?}", parsed_sii2);
+
+    let sii3 = "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1";
+    let parsed_sii3 = string_to_service_instance_id(sii3);
+    println!("\nSII Parsing: {:?}", parsed_sii3);
 }

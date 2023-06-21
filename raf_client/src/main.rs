@@ -1,5 +1,4 @@
 #[allow(unused)]
-
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -22,6 +21,7 @@ async fn main() -> Result<(), Error> {
     let (args, _rest) = opts! {
         synopsis "RAF SLE test client";
         opt config:Option<String>, desc: "Load config from the given file.";
+        opt writeconfig:bool, desc: "Write a default configuration to a file";
     }
     .parse_or_exit();
 
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Error> {
             Root::builder()
                 .appender("logfile")
                 .appender("stderr")
-                .build(LevelFilter::Debug),
+                .build(LevelFilter::Trace),
         )
         .unwrap();
     match log4rs::init_config(log_config) {
@@ -47,6 +47,13 @@ async fn main() -> Result<(), Error> {
             return Err(Error::new(ErrorKind::InvalidInput, msg));
         }
         Ok(_) => {}
+    }
+
+    if args.writeconfig {
+        let config = UserConfig::default();
+        UserConfig::write_to_file(Path::new("raf_client_default_config.yaml"), &config).await?;
+        println!("Wrote default config to file 'raf_client_default_config.yaml'.");
+        return Ok(());
     }
 
     // if specified, load the config
@@ -64,6 +71,11 @@ async fn main() -> Result<(), Error> {
     // Now start the whole processing
     info!("RAF Client started");
 
-    run_app(&config).await?;
+    match run_app(&config).await {
+        Ok(_) => {}
+        Err(err) => {
+            error!("Application returned error: {err}");
+        }
+    }
     Ok(())
 }

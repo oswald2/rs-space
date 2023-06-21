@@ -1,0 +1,15 @@
+tml_config:
+  heartbeat: 30
+  dead_factor: 2
+  server_init_time: 30
+  min_heartbeat: 3
+  max_heartbeat: 3600
+  min_dead_factor: 2
+  max_dead_factor: 60
+rafs:
+- hostname: localhost
+  port: 5100
+  sii: sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+  initiator: SLETT
+  responder_port: TMPORT
+  version: V4

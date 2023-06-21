@@ -16,7 +16,7 @@ impl Default for UserConfig {
     fn default() -> Self {
         UserConfig {
             tml_config: TMLConfig::default(),
-            rafs: Vec::new(),
+            rafs: vec![RAFConfig::default()],
         }
     }
 }
