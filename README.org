@@ -25,7 +25,7 @@ The current work is focused in this area. The goal is to support the RAF, RCF an
  - Basic ASN1 encoding for some SLE PDUs is there (RAF BIND, UNBIND)
  - Basic configuration for TML layer and RAF is there
 
-Currently, there is no authentication, credentials and no data flows are implemented.
+Currently, there is no authentication, credentials and no data flows are implemented. Support for the SLE API communications server is also not planned, the library uses it's own sockets. Multiple service instances in parallel will also be supported.
 
 ** Roadmap
 
