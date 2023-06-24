@@ -10,6 +10,7 @@ pub struct RAFConfig{
     pub initiator: String,
     pub responder_port: String, 
     pub version: SleVersion, 
+    pub sle_operation_timeout: u16,
 }
 
 
@@ -22,6 +23,7 @@ impl Default for RAFConfig {
             initiator: "SLETT".to_string(),
             responder_port: "TMPORT".to_string(),
             version: SleVersion::V4,
+            sle_operation_timeout: 30,
         }
     }
 }

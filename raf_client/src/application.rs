@@ -1,7 +1,7 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use rs_space_sle::{raf::client::SleClientHandle, asn1_raf::UnbindReason};
+use rs_space_sle::{raf::client::RAFClient, asn1_raf::UnbindReason};
 use rs_space_sle::user_config::UserConfig;
 use tokio::io::Error;
 
@@ -15,7 +15,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = SleClientHandle::sle_connect_raf(&config.tml_config, &raf_config).await?;
+        let mut raf = RAFClient::sle_connect_raf(&config.tml_config, &raf_config).await?;
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 
@@ -39,7 +39,9 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
             }
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        tokio::signal::ctrl_c().await.expect("failed to listen to CTRL-C event");
+
+        raf.stop().await;
     }
     Ok(())
 }

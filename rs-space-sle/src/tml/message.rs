@@ -1,5 +1,7 @@
 #[allow(unused)]
 use byteorder::{BigEndian, WriteBytesExt};
+use function_name::named;
+use log::debug;
 
 use std::io::{Cursor, Write};
 
@@ -7,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
 
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TMLMessageType {
     SlePduMessage = 1,
     ContextMessage = 2,
@@ -66,6 +68,10 @@ impl TMLMessage {
 
     pub fn heartbeat_message() -> TMLMessage {
         TMLMessage::new(TMLMessageType::HeartBeat)
+    }
+
+    pub fn is_heartbeat(&self) -> bool {
+        self.msg_type == TMLMessageType::HeartBeat
     }
 
     pub fn context_message(interval: u16, dead_factor: u16) -> TMLMessage {
@@ -135,8 +141,10 @@ impl TMLMessage {
         }
     }
 
-
+    #[named]
     pub async fn write_to_async<T: AsyncWriteExt + Unpin>(&self, writer: &mut T) -> Result<(), Error> {
+        debug!(function_name!());
+
         writer.write_u8(self.msg_type as u8).await?;
         writer.write(&[0,0,0]).await?;
         let len: u32 = self.data.len() as u32;

@@ -8,6 +8,7 @@ use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::asn1_raf::{ApplicationIdentifier, SlePdu, UnbindReason};
 use crate::raf::config::RAFConfig;
@@ -15,8 +16,8 @@ use crate::raf::state::{InternalRAFState, RAFState};
 // use crate::pdu::PDU;
 use crate::tml::config::TMLConfig;
 use crate::tml::message::TMLMessage;
-use crate::types::sle::{string_to_service_instance_id, Credentials, SleVersion};
-use log::{debug, error, info};
+use crate::types::sle::{string_to_service_instance_id, Credentials};
+use log::{debug, error};
 
 use function_name::named;
 
@@ -27,30 +28,42 @@ pub enum SleMsg {
     PDU(SlePdu),
 }
 
-pub struct SleClientHandle {
+type InternalTask = Option<JoinHandle<()>>;
+
+pub struct RAFClient {
     chan: Sender<SleMsg>,
+    cancellation_token: CancellationToken,
     state: Arc<Mutex<InternalRAFState>>,
     // we use an Option here, so that we can move out the JoinHandle from the struct for
     // awaiting on it
-    read_task: Option<JoinHandle<()>>,
-    write_task: Option<JoinHandle<()>>,
+    read_task: InternalTask,
+    write_task: InternalTask,
+    op_timeout: Duration,
 }
 
 type InternalState = Arc<Mutex<InternalRAFState>>;
 
-impl SleClientHandle {
+impl RAFClient {
     /// Connect to the SLE RAF instance given in the RAFConfig.
     pub async fn sle_connect_raf(
         cfg: &TMLConfig,
         raf_config: &RAFConfig,
-    ) -> Result<SleClientHandle, Error> {
+    ) -> Result<RAFClient, Error> {
         let sock = TcpStream::connect((raf_config.hostname.as_ref(), raf_config.port)).await?;
 
         let (mut rx, mut tx) = sock.into_split();
 
         let (sender, mut receiver) = channel::<SleMsg>(QUEUE_SIZE);
+        let sender2 = sender.clone();
+
+        let cancellation = CancellationToken::new();
+        let cancel1 = cancellation.clone();
+        let cancel2 = cancellation.clone();
 
         let timeout = cfg.heartbeat;
+        let recv_timeout = cfg.heartbeat * cfg.dead_factor;
+        let sii = raf_config.sii.clone();
+        let sii2 = raf_config.sii.clone();
 
         let raf_state = Arc::new(Mutex::new(InternalRAFState::new()));
         let raf_state2 = raf_state.clone();
@@ -58,15 +71,35 @@ impl SleClientHandle {
 
         let hdl1 = tokio::spawn(async move {
             loop {
-                match TMLMessage::async_read(&mut rx).await {
-                    Err(err) => {
-                        error!("Error reading SLE TML message from socket: {}", err);
-                        break;
+                select!(
+                    res = TMLMessage::async_read(&mut rx) => {
+                        match res {
+                            Err(err) => {
+                                error!("Error reading SLE TML message from socket: {}", err);
+                                break;
+                            }
+                            Ok(msg) => {
+                                if msg.is_heartbeat() {
+                                    debug!("SLE TML heartbeat received");
+                                }
+                                else
+                                {
+                                    parse_sle_message(&msg, raf_state.clone());
+                                }
+                            }
+                        }
+                    },
+                    _ = tokio::time::sleep(Duration::from_secs(recv_timeout as u64)) => {
+                        // we have a receive heartbeat timeout, so report the error and disconnect
+                        error!("Heartbeat timeout on service instance {}, terminating connection", sii);
+                        let _ = sender2.send(SleMsg::Stop).await;
+                        return;
                     }
-                    Ok(msg) => {
-                        parse_sle_message(&msg, raf_state.clone());
+                    _ = cancel1.cancelled() => {
+                        debug!("RAF client for {} has been cancelled (read task)", sii);
+                        return;
                     }
-                }
+                );
             }
         });
 
@@ -84,6 +117,7 @@ impl SleClientHandle {
                                         return;
                                     }
                                     Some(SleMsg::PDU(pdu)) => {
+                                        debug!("Received command: {:?}", pdu);
                                         match process_sle_msg(pdu, raf_state2.clone()) {
                                             Err(err) => {
                                                 error!("Error encoding SLE message: {}", err);
@@ -111,16 +145,23 @@ impl SleClientHandle {
                                 error!("Error sending SLE TML hearbeat message: {}", err);
                                 break;
                             }
+                        },
+                        _ = cancel2.cancelled() => {
+                            debug!("RAF client for {} has been cancelled (read task)", sii2);
+                            return;
                         }
+
                 }
             }
         });
 
-        let ret = SleClientHandle {
+        let ret = RAFClient {
             chan: sender,
+            cancellation_token: cancellation,
             state: raf_state3,
             read_task: Some(hdl1),
             write_task: Some(hdl2),
+            op_timeout: Duration::from_secs(raf_config.sle_operation_timeout as u64),
         };
 
         Ok(ret)
@@ -172,12 +213,23 @@ impl SleClientHandle {
             initiator_identifier: VisibleString::new(Utf8String::from(&config.initiator)),
             responder_port_identifier: VisibleString::new(Utf8String::from(&config.responder_port)),
             service_type: (ApplicationIdentifier::RtnAllFrames as i32).into(),
-            version_number: SleVersion::V3 as u16,
+            version_number: config.version as u16,
             service_instance_identifier: sii,
         };
 
         // And finally, send the PDU
-        self.send_pdu(pdu).await
+        self.send_pdu(pdu).await?;
+
+        let timeout = Duration::from_secs(config.sle_operation_timeout as u64);
+        let cancel = self.cancellation_token.clone();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(timeout).await;
+            error!("Timeout waiting for BIND RESPONSE, terminating connection");
+            cancel.cancel();
+        });
+
+        Ok(())
     }
 
     #[named]
@@ -205,12 +257,22 @@ impl SleClientHandle {
             unbind_reason: (reason as i32).into(),
         };
 
-        self.send_pdu(pdu).await
+        self.send_pdu(pdu).await?;
+
+        let dur = self.op_timeout;
+        let cancel = self.cancellation_token.clone();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(dur).await;
+            error!("Timeout waiting for UNBIND RESPONSE, terminating connection");
+            cancel.cancel();
+        });
+
+        Ok(())
     }
 
-    /// Stop the machinery
     pub async fn stop(&mut self) {
-        let _ = self.command(SleMsg::Stop).await;
+        let _ = self.chan.send(SleMsg::Stop).await;
         if let Some(handle) = self.write_task.take() {
             let _ = handle.await;
         }
@@ -218,9 +280,14 @@ impl SleClientHandle {
             drop(handle);
         }
     }
+
+    /// Stop the machinery
+    pub async fn cancel(&self) {
+        self.cancellation_token.cancel();
+    }
 }
 
-fn process_sle_msg(pdu: SlePdu, state: InternalState) -> Result<TMLMessage, String> {
+fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, String> {
     match process_sle_pdu(pdu) {
         Err(err) => Err(format!("Error encoding PDU to ASN1: {}", err)),
         Ok(val) => Ok(TMLMessage::new_with_data(val)),
