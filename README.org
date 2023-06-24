@@ -1,0 +1,43 @@
+* RS-SPACE a Rust library for space protocols
+
+This library aims to provide implementations of space protocols. The current focus is on a working SLE (Space Link Extension) implementation according to the CCSDS Standard.
+
+This is very much a work in progress and not yet usable.
+
+** Supported Protocols
+
+*** PUS TM and TC
+
+This is still under implementation, basic support for creating, reading and writing raw CCSDS and PUS packets is already there. The focus here is also on performance. Currently, there are 3 layers:
+ - a FastCcsds packet, which contains the raw byte stream and accessor functions reading/writing from/to this bytestream
+ - a Ccsds packet which provides a decoded header and data part
+ - a PUSPacket, which provides the header, the PUS secondary header (DFH) and the data part as bytes
+
+Implementation of TM- and TC-Frames is also foreseen as well as extraction of Parameters from packets.
+
+*** SLE (Space Link Extension)
+
+The current work is focused in this area. The goal is to support the RAF, RCF and FCLTU services as provider and user.
+
+ - TML layer is implemented
+ - Heartbeat handling is working
+ - Operations timeout handling is working for the implemented operations
+ - Basic ASN1 encoding for some SLE PDUs is there (RAF BIND, UNBIND)
+ - Basic configuration for TML layer and RAF is there
+
+Currently, there is no authentication, credentials and no data flows are implemented.
+
+** Roadmap
+
+Envisaged is the following:
+
+ 1. RAF User implementation
+ 2. RAF Provider implmenentation
+ 3. FCLTU User implementation
+ 4. FCLTU Provider implementation
+
+RCF is currently not on the mandatory list (as it is a slightly modified RAF).
+
+** Testing
+
+The implementation is currently tested against ESA's SLETT Tool, the ParagonTT Tool from Terma (also used by ESA) and the ESA C++ SLE API.
