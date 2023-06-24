@@ -2,8 +2,8 @@ use log::{error, info};
 
 use crate::asn1_raf::BindResult;
 
-#[derive(Debug, Default, Clone)]
-enum RAFState {
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RAFState {
     #[default]
     Unbound,
     Bound,
@@ -37,5 +37,9 @@ impl InternalRAFState {
     pub fn process_unbind(&mut self) {
         self.state = RAFState::Unbound;
         info!("UNBIND operation successful");
+    }
+
+    pub fn get_state(&self) -> RAFState {
+        self.state
     }
 }

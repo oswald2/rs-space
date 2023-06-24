@@ -4,3 +4,4 @@ Cargo.lock
 rs-space-core/target
 cnc_receiver/target
 cnc_receiver/log/cnc_receiver.log
+log/raf_client.log

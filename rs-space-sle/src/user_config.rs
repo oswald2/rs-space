@@ -1,5 +1,5 @@
-use crate::raf_config::RAFConfig;
-use crate::tml_config::TMLConfig;
+use crate::tml::config::TMLConfig;
+use crate::raf::config::RAFConfig;
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
