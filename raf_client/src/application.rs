@@ -1,8 +1,8 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use rs_space_sle::{raf::client::RAFClient, asn1_raf::UnbindReason};
-use rs_space_sle::user_config::UserConfig;
+use rs_space_sle::{raf::client::RAFClient, asn1::UnbindReason};
+use rs_space_sle::user::config::UserConfig;
 use tokio::io::Error;
 
 use log::{error, info};
@@ -15,7 +15,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = RAFClient::sle_connect_raf(&config.tml_config, &raf_config).await?;
+        let mut raf = RAFClient::sle_connect_raf(&config.common, &raf_config).await?;
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 

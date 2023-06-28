@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, io::Error};
 
 use nom::{
     branch::alt,
@@ -12,6 +12,8 @@ use rasn::{
     AsnType, Decode, Encode,
 };
 use serde::{Deserialize, Serialize};
+
+use super::aul::ISP1Credentials;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum SleVersion {
@@ -42,11 +44,25 @@ pub enum Time {
     CcsdsPicoFormat(TimeCCSDSpico),
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 pub struct TimeCCSDS(Vec<u8>);
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 pub struct TimeCCSDSpico(Vec<u8>);
+
+pub fn instant_to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, Error> {
+    Ok(TimeCCSDS(
+        time.encode(Some(rs_space_core::time::TimeEncoding::CDS8))?,
+    ))
+}
+
+pub fn instant_to_ccsds_time_pico(
+    time: &rs_space_core::time::Time,
+) -> Result<TimeCCSDSpico, Error> {
+    Ok(TimeCCSDSpico(
+        time.encode(Some(rs_space_core::time::TimeEncoding::CDS10))?,
+    ))
+}
 
 // ASN1 common types
 pub type ConditionalTime = Option<Time>;
@@ -57,7 +73,7 @@ pub enum Credentials {
     #[rasn(tag(context, 0))]
     Unused,
     #[rasn(tag(context, 1))]
-    Used(Vec<u8>),
+    Used(ISP1Credentials),
 }
 
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]

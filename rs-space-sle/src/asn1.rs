@@ -108,7 +108,7 @@ pub enum SlePdu {
     },
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum BindResult {
     #[rasn(tag(0))]

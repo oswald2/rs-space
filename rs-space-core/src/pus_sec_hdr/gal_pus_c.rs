@@ -194,7 +194,8 @@ impl PUSSecHeader for GalSecHdrTM {
         arr[6] = (self.pus_dest_id.0 & 0xFF) as u8;
 
         const END_INDEX: usize = 7 + time_length(TimeEncoding::CUC42);
-        self.time.encode(&mut arr[7..END_INDEX])?;
+        self.time
+            .encode_into(Some(TimeEncoding::CUC42), &mut arr[7..END_INDEX])?;
 
         // the last byte is reserverd for Galileo
         arr[END_INDEX] = 0;

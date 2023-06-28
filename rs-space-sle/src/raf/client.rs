@@ -10,12 +10,14 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::asn1_raf::{ApplicationIdentifier, SlePdu, UnbindReason};
+use crate::asn1::{ApplicationIdentifier, SlePdu, UnbindReason};
 use crate::raf::config::RAFConfig;
 use crate::raf::state::{InternalRAFState, RAFState};
+use crate::sle::config::{CommonConfig, SleAuthType};
 // use crate::pdu::PDU;
 use crate::tml::config::TMLConfig;
 use crate::tml::message::TMLMessage;
+use crate::types::aul::check_credentials;
 use crate::types::sle::{string_to_service_instance_id, Credentials};
 use log::{debug, error};
 
@@ -46,7 +48,7 @@ type InternalState = Arc<Mutex<InternalRAFState>>;
 impl RAFClient {
     /// Connect to the SLE RAF instance given in the RAFConfig.
     pub async fn sle_connect_raf(
-        cfg: &TMLConfig,
+        config: &CommonConfig,
         raf_config: &RAFConfig,
     ) -> Result<RAFClient, Error> {
         let sock = TcpStream::connect((raf_config.hostname.as_ref(), raf_config.port)).await?;
@@ -60,6 +62,7 @@ impl RAFClient {
         let cancel1 = cancellation.clone();
         let cancel2 = cancellation.clone();
 
+        let cfg: &TMLConfig = &config.tml;
         let timeout = cfg.heartbeat;
         let recv_timeout = cfg.heartbeat * cfg.dead_factor;
         let sii = raf_config.sii.clone();
@@ -68,6 +71,8 @@ impl RAFClient {
         let raf_state = Arc::new(Mutex::new(InternalRAFState::new()));
         let raf_state2 = raf_state.clone();
         let raf_state3 = raf_state.clone();
+
+        let common_config = config.clone();
 
         let hdl1 = tokio::spawn(async move {
             loop {
@@ -84,7 +89,7 @@ impl RAFClient {
                                 }
                                 else
                                 {
-                                    parse_sle_message(&msg, raf_state.clone());
+                                    parse_sle_message(&common_config, &msg, raf_state.clone());
                                 }
                             }
                         }
@@ -288,44 +293,103 @@ impl RAFClient {
 }
 
 fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, String> {
-    match process_sle_pdu(pdu) {
+    match decode_sle_pdu(pdu) {
         Err(err) => Err(format!("Error encoding PDU to ASN1: {}", err)),
         Ok(val) => Ok(TMLMessage::new_with_data(val)),
     }
 }
 
-fn process_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
+fn decode_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
     rasn::der::encode(&pdu)
 }
 
-fn parse_sle_message(msg: &TMLMessage, state: InternalState) {
+fn parse_sle_message(config: &CommonConfig, msg: &TMLMessage, state: InternalState) {
     let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
     debug!("Decoded SLE PDU: {:?}", res);
 
-    // TODO: credentials and authentication check
-
     match res {
-        Ok(SlePdu::SleBindReturn {
-            performer_credentials: _,
-            responder_identifier,
-            result,
-        }) => {
-            let mut lock = state.lock().expect("Mutex lock failed");
-            lock.process_bind_return(&responder_identifier, result);
-        }
-        Ok(SlePdu::SleUnbindReturn {
-            responder_credentials: _,
-            result: _,
-        }) => {
-            let mut lock = state.lock().expect("Mutex lock failed");
-            lock.process_unbind();
-        }
         Ok(pdu) => {
-            debug!("Received: {:?}", pdu);
+            // check authentication
+            if !check_authentication(config, &pdu) {
+                error!("SLE PDU failed authentication");
+                // TODO: terminate the connection
+            }
+
+            // then continue processing
+            process_sle_pdu(&pdu, state)
         }
         Err(err) => {
             error!("Error on decoding SLE PDU: {err}");
+        }
+    }
+}
+
+fn process_sle_pdu(pdu: &SlePdu, state: InternalState) {
+    match pdu {
+        SlePdu::SleBindReturn {
+            performer_credentials: _,
+            responder_identifier,
+            result,
+        } => {
+            let mut lock = state.lock().expect("Mutex lock failed");
+            lock.process_bind_return(&responder_identifier, result);
+        }
+        SlePdu::SleUnbindReturn {
+            responder_credentials: _,
+            result: _,
+        } => {
+            let mut lock = state.lock().expect("Mutex lock failed");
+            lock.process_unbind();
+        }
+        pdu => {
+            debug!("Received: {:?}", pdu);
+        }
+    }
+}
+
+fn check_authentication(config: &CommonConfig, pdu: &SlePdu) -> bool {
+    match config.auth_type {
+        SleAuthType::AuthNone => true,
+        SleAuthType::AuthBind => match pdu {
+            SlePdu::SleBindInvocation {
+                invoker_credentials,
+                initiator_identifier,
+                ..
+            } => {
+                match invoker_credentials {
+                    Credentials::Unused => {
+                        error!("BIND Authentication failed: AUTH_BIND requested, but BIND invocation does not contain credentials");
+                        return false;
+                    }
+                    Credentials::Used(isp1) => {
+                        // TODO real authentication needs password
+                        return check_credentials(isp1, initiator_identifier, "");
+                    }
+                }
+            }
+            SlePdu::SleBindReturn {
+                performer_credentials,
+                responder_identifier,
+                ..
+            } => {
+                match performer_credentials {
+                    Credentials::Unused => {
+                        error!("BIND Authentication failed: AUTH_BIND requested, but BIND return does not contain credentials");
+                        return false;
+                    }
+                    Credentials::Used(isp1) => {
+                        // TODO real authentication needs password
+                        return check_credentials(isp1, responder_identifier, "");
+                    }
+                }
+            }
+            _ => {
+                return true;
+            }
+        },
+        SleAuthType::AuthAll => {
+            return true;
         }
     }
 }

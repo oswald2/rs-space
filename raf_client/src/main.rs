@@ -2,7 +2,7 @@
 use std::fs::read_to_string;
 use std::path::Path;
 
-use rs_space_sle::user_config::UserConfig;
+use rs_space_sle::user::config::UserConfig;
 use tokio::io::{Error, ErrorKind};
 
 use rustop::opts;

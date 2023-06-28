@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 rs-space-sle = { path = "../rs-space-sle" }
-rasn = "0.6.1"
+rasn = "0.7"

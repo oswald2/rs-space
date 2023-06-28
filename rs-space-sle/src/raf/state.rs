@@ -1,6 +1,6 @@
 use log::{error, info};
 
-use crate::asn1_raf::BindResult;
+use crate::asn1::BindResult;
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RAFState {
@@ -21,7 +21,7 @@ impl InternalRAFState {
         InternalRAFState::default()
     }
 
-    pub fn process_bind_return(&mut self, responder: &str, result: BindResult) {
+    pub fn process_bind_return(&mut self, responder: &str, result: &BindResult) {
         match result {
             BindResult::BindOK(_) => {
                 info!("BIND operation successful from responder {responder}");

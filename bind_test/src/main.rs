@@ -1,7 +1,7 @@
 use rasn::ber::de::Error;
 
 use rs_space_sle::{
-    asn1_raf::*,
+    asn1::*,
     types::sle::{
         new_service_instance_attribute, service_instance_identifier_to_string, RAF, RSL_FG, SAGR,
         SPACK, string_to_service_instance_id,
@@ -28,19 +28,19 @@ fn main() {
     let unbind: Vec<u8> = vec![191, 102, 5, 128, 0, 2, 1, 0];
     let unbind_ret: Vec<u8> = vec![191, 103, 4, 128, 0, 128, 0];
 
-    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_enc[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_enc);
     println!("Bind Result: {:?}", res);
 
-    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_ret);
     println!("Bind Return Result: {:?}", res);
 
-    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_neg_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&bind_neg_ret);
     println!("Bind Negative Return Result: {:?}", res);
 
-    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind);
     println!("Unbind Result: {:?}", res);
 
-    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind_ret[..]);
+    let res: Result<SlePdu, Error> = rasn::der::decode(&unbind_ret);
     println!("Unbind Return Result: {:?}", res);
 
     let sii_attr = vec![

@@ -1,5 +1,5 @@
-use crate::tml::config::TMLConfig;
 use crate::raf::config::RAFConfig;
+use crate::sle::config::CommonConfig;
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -8,14 +8,14 @@ use tokio::io::{Error, ErrorKind};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    pub tml_config: TMLConfig,
+    pub common: CommonConfig,
     pub rafs: Vec<RAFConfig>,
 }
 
 impl Default for UserConfig {
     fn default() -> Self {
         UserConfig {
-            tml_config: TMLConfig::default(),
+            common: CommonConfig::default(),
             rafs: vec![RAFConfig::default()],
         }
     }
