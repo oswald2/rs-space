@@ -1,11 +1,22 @@
-tml_config:
-  heartbeat: 30
-  dead_factor: 2
-  server_init_time: 30
-  min_heartbeat: 3
-  max_heartbeat: 3600
-  min_dead_factor: 2
-  max_dead_factor: 60
+common:
+  tml:
+    heartbeat: 30
+    dead_factor: 2
+    server_init_time: 30
+    min_heartbeat: 3
+    max_heartbeat: 3600
+    min_dead_factor: 2
+    max_dead_factor: 60
+  authority_identifier: PARAGONTT
+  password: 000102030405060708090a0b0c0d0e0f
+  peers:
+  - authority_id: EGSCC
+    password: '12345678'
+  - authority_id: SLETT
+    password: aabbccddaabbccdd
+  auth_type: AuthNone
+  hash_to_use: SHA256
+  version: V3
 rafs:
 - hostname: localhost
   port: 5100
@@ -13,3 +24,4 @@ rafs:
   initiator: SLETT
   responder_port: TMPORT
   version: V4
+  sle_operation_timeout: 30

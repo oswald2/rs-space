@@ -210,6 +210,15 @@ impl HexBytes {
         HexBytes(Vec::new())
     }
 
+    pub fn from_str(string: &str) -> Result<HexBytes, String> {
+        match hex::decode(string) {
+            Ok(h) => Ok(HexBytes(h)),
+            Err(err) => {
+                Err(format!("{:?}", err))
+            }
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -226,6 +235,12 @@ impl HexBytes {
 impl fmt::Display for HexBytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(&self.0))
+    }
+}
+
+impl AsRef<[u8]> for HexBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 

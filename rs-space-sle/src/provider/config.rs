@@ -1,5 +1,5 @@
 use crate::raf::config::RAFConfig;
-use crate::sle::config::CommonConfig;
+use crate::sle::config::{CommonConfig, CommonConfigExt};
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -7,31 +7,46 @@ use tokio::fs::{read_to_string, write};
 use tokio::io::{Error, ErrorKind};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfigExt {
+    pub common: CommonConfigExt,
+    pub rafs: Vec<RAFConfig>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ProviderConfig {
     pub common: CommonConfig,
     pub rafs: Vec<RAFConfig>,
 }
 
-impl Default for ProviderConfig {
-    fn default() -> Self {
+impl ProviderConfig {
+    pub fn from(conf: ProviderConfigExt) -> Self {
         ProviderConfig {
-            common: CommonConfig::default(),
+            common: CommonConfig::from(conf.common),
+            rafs: conf.rafs,
+        }
+    }
+}
+
+impl Default for ProviderConfigExt {
+    fn default() -> Self {
+        ProviderConfigExt {
+            common: CommonConfigExt::default(),
             rafs: vec![RAFConfig::default()],
         }
     }
 }
 
-impl ProviderConfig {
+impl ProviderConfigExt {
     pub async fn read_from_file(filename: &Path) -> Result<ProviderConfig, Error> {
         let content = read_to_string(filename).await?;
 
         match serde_yaml::from_str(&content) {
-            Ok(cfg) => Ok(cfg),
+            Ok(cfg) => Ok(ProviderConfig::from(cfg)),
             Err(err) => return Err(Error::new(ErrorKind::Other, format!("{}", err))),
         }
     }
 
-    pub async fn write_to_file(filename: &Path, cfg: &ProviderConfig) -> Result<(), Error> {
+    pub async fn write_to_file(filename: &Path, cfg: &ProviderConfigExt) -> Result<(), Error> {
         match serde_yaml::to_string(cfg) {
             Err(err) => return Err(Error::new(ErrorKind::Other, format!("{}", err))),
             Ok(yaml) => {

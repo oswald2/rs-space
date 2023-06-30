@@ -1,5 +1,3 @@
-use std::io::Error;
-
 use bytes::Bytes;
 use hmac_sha256::Hash;
 use rasn::{
@@ -10,7 +8,36 @@ use sha1_smol::Sha1;
 
 use crate::sle::config::HashToUse;
 
-use super::sle::TimeCCSDS;
+use super::sle::{instant_to_ccsds_time, TimeCCSDS};
+
+#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+pub struct ISP1Credentials {
+    time: TimeCCSDS,
+    random: i32,
+    the_protected: Bytes,
+}
+
+impl ISP1Credentials {
+    pub fn new(
+        hash_to_use: HashToUse,
+        time: &rs_space_core::time::Time,
+        random: i32,
+        name: &str,
+        password: &Bytes,
+    ) -> ISP1Credentials {
+        let t = instant_to_ccsds_time(time).expect("Error encoding time to SLE CCSDS Time");
+        let name = VisibleString::new(Utf8String::from(name));
+        let password = Bytes::copy_from_slice(password.as_ref());
+        let hi = HashInput::new(&t, random, &name, password);
+        let protected = hi.the_protected(hash_to_use);
+
+        ISP1Credentials {
+            time: t,
+            random,
+            the_protected: protected,
+        }
+    }
+}
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct HashInput {
@@ -20,48 +47,26 @@ pub struct HashInput {
     password: OctetString,
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
-pub struct ISP1Credentials {
-    time: TimeCCSDS,
-    random: i32,
-    the_protected: Vec<u8>,
-}
-
 impl HashInput {
-    pub fn new(
-        time: &TimeCCSDS,
-        random: i32,
-        user: &str,
-        passwd: &str,
-    ) -> Result<HashInput, Error> {
-        let passwd = match hex::decode(passwd) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Password is not Hex-ASCII encoded",
-                ));
-            }
-        };
-
-        Ok(HashInput {
+    pub fn new(time: &TimeCCSDS, random: i32, user: &VisibleString, password: Bytes) -> HashInput {
+        HashInput {
             time: time.clone(),
             random,
-            user_name: VisibleString::new(Utf8String::from(user)),
-            password: Bytes::copy_from_slice(&passwd),
-        })
+            user_name: user.clone(),
+            password,
+        }
     }
 
-    pub fn the_protected(&self, mode: HashToUse) -> Result<Vec<u8>, rasn::ber::enc::Error> {
-        let out = rasn::der::encode(self)?;
+    pub fn the_protected(&self, mode: HashToUse) -> Bytes {
+        let out = rasn::der::encode(self).unwrap();
         match mode {
             HashToUse::SHA1 => {
                 let sha1 = Sha1::from(&out);
-                Ok(Vec::from(sha1.digest().bytes()))
+                Bytes::copy_from_slice(&sha1.digest().bytes())
             }
             HashToUse::SHA256 => {
                 let sha256 = Hash::hash(&out);
-                Ok(Vec::from(sha256))
+                Bytes::copy_from_slice(&sha256)
             }
         }
     }
@@ -69,35 +74,22 @@ impl HashInput {
 
 pub fn check_credentials(
     credentials: &ISP1Credentials,
-    authority_identifier: &str,
-    password: &str,
+    authority_identifier: &VisibleString,
+    password: &Bytes,
 ) -> bool {
-    match HashInput::new(
+    let hi = HashInput::new(
         &credentials.time,
         credentials.random,
         authority_identifier,
-        password,
-    ) {
-        Ok(hi) => {
-            let len = credentials.the_protected.len();
-            let prot = if len == 20 {
-                match hi.the_protected(HashToUse::SHA1) {
-                    Ok(res) => res,
-                    Err(_) => {
-                        return false;
-                    }
-                }
-            } else {
-                match hi.the_protected(HashToUse::SHA256) {
-                    Ok(res) => res,
-                    Err(_) => {
-                        return false;
-                    }
-                }
-            };
+        password.clone(),
+    );
 
-            prot == credentials.the_protected
-        }
-        Err(_) => false,
-    }
+    let len = credentials.the_protected.len();
+    let prot = if len == 20 {
+        hi.the_protected(HashToUse::SHA1)
+    } else {
+        hi.the_protected(HashToUse::SHA256)
+    };
+
+    prot == credentials.the_protected
 }

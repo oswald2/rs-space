@@ -2,7 +2,7 @@
 use std::fs::read_to_string;
 use std::path::Path;
 
-use rs_space_sle::user::config::UserConfig;
+use rs_space_sle::user::config::{UserConfig, UserConfigExt};
 use tokio::io::{Error, ErrorKind};
 
 use rustop::opts;
@@ -50,15 +50,15 @@ async fn main() -> Result<(), Error> {
     }
 
     if args.writeconfig {
-        let config = UserConfig::default();
-        UserConfig::write_to_file(Path::new("raf_client_default_config.yaml"), &config).await?;
+        let config = UserConfigExt::default();
+        UserConfigExt::write_to_file(Path::new("raf_client_default_config.yaml"), &config).await?;
         println!("Wrote default config to file 'raf_client_default_config.yaml'.");
         return Ok(());
     }
 
     // if specified, load the config
     let config: UserConfig = match args.config {
-        Some(path) => match UserConfig::read_from_file(Path::new(&path)).await {
+        Some(path) => match UserConfigExt::read_from_file(Path::new(&path)).await {
             Ok(cfg) => cfg,
             Err(err) => {
                 error!("Error loading config from file {}: {}", path, err);

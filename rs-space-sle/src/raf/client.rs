@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex};
 #[allow(unused)]
 use std::time::Duration;
 
+use rand::rngs::ThreadRng;
+use rand::{thread_rng, RngCore};
 use rasn::types::{Utf8String, VisibleString};
+use rs_space_core::time::{Time, TimeEncoding};
 use tokio::io::Error;
 use tokio::net::TcpStream;
 use tokio::select;
@@ -17,7 +20,7 @@ use crate::sle::config::{CommonConfig, SleAuthType};
 // use crate::pdu::PDU;
 use crate::tml::config::TMLConfig;
 use crate::tml::message::TMLMessage;
-use crate::types::aul::check_credentials;
+use crate::types::aul::{check_credentials, ISP1Credentials};
 use crate::types::sle::{string_to_service_instance_id, Credentials};
 use log::{debug, error};
 
@@ -41,6 +44,7 @@ pub struct RAFClient {
     read_task: InternalTask,
     write_task: InternalTask,
     op_timeout: Duration,
+    rand: ThreadRng,
 }
 
 type InternalState = Arc<Mutex<InternalRAFState>>;
@@ -73,6 +77,7 @@ impl RAFClient {
         let raf_state3 = raf_state.clone();
 
         let common_config = config.clone();
+        let raf_config2 = raf_config.clone();
 
         let hdl1 = tokio::spawn(async move {
             loop {
@@ -89,7 +94,7 @@ impl RAFClient {
                                 }
                                 else
                                 {
-                                    parse_sle_message(&common_config, &msg, raf_state.clone());
+                                    parse_sle_message(&common_config, &raf_config2, &msg, raf_state.clone());
                                 }
                             }
                         }
@@ -167,6 +172,7 @@ impl RAFClient {
             read_task: Some(hdl1),
             write_task: Some(hdl2),
             op_timeout: Duration::from_secs(raf_config.sle_operation_timeout as u64),
+            rand: thread_rng(),
         };
 
         Ok(ret)
@@ -189,10 +195,29 @@ impl RAFClient {
         self.command(SleMsg::PDU(pdu)).await
     }
 
+    fn new_credentials(&mut self, common_config: &CommonConfig) -> Credentials {
+        let credentials = if common_config.auth_type == SleAuthType::AuthNone {
+            Credentials::Unused
+        } else {
+            Credentials::Used(ISP1Credentials::new(
+                common_config.hash_to_use,
+                &Time::now(TimeEncoding::CDS8),
+                self.rand.next_u32() as i32,
+                &common_config.authority_identifier,
+                &common_config.password,
+            ))
+        };
+        credentials
+    }
+
     /// Bind the service given in the config to the end point, establish a connection and execute
     /// the SLE BIND operation
     #[named]
-    pub async fn bind(&mut self, config: &RAFConfig) -> Result<(), String> {
+    pub async fn bind(
+        &mut self,
+        common_config: &CommonConfig,
+        config: &RAFConfig,
+    ) -> Result<(), String> {
         debug!(function_name!());
 
         // first check if we are in a correct state
@@ -211,10 +236,12 @@ impl RAFClient {
         // first, convert the SII string from the config into a ASN1 structure
         let sii = string_to_service_instance_id(&config.sii)?;
 
+        // generate the credentials
+        let credentials = self.new_credentials(common_config);
+
         // Create the BIND SLE PDU
         let pdu = SlePdu::SleBindInvocation {
-            // TODO: no credentials yet
-            invoker_credentials: Credentials::Unused,
+            invoker_credentials: credentials,
             initiator_identifier: VisibleString::new(Utf8String::from(&config.initiator)),
             responder_port_identifier: VisibleString::new(Utf8String::from(&config.responder_port)),
             service_type: (ApplicationIdentifier::RtnAllFrames as i32).into(),
@@ -238,7 +265,11 @@ impl RAFClient {
     }
 
     #[named]
-    pub async fn unbind(&mut self, reason: UnbindReason) -> Result<(), String> {
+    pub async fn unbind(
+        &mut self,
+        common_config: &CommonConfig,
+        reason: UnbindReason,
+    ) -> Result<(), String> {
         debug!(function_name!());
 
         // first check if we are in a correct state
@@ -256,9 +287,11 @@ impl RAFClient {
             return Ok(());
         }
 
-        // TODO: no credentials yet
+        // generate the credentials
+        let credentials = self.new_credentials(common_config);
+
         let pdu = SlePdu::SleUnbindInvocation {
-            invoker_credentials: Credentials::Unused,
+            invoker_credentials: credentials,
             unbind_reason: (reason as i32).into(),
         };
 
@@ -303,7 +336,12 @@ fn decode_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
     rasn::der::encode(&pdu)
 }
 
-fn parse_sle_message(config: &CommonConfig, msg: &TMLMessage, state: InternalState) {
+fn parse_sle_message(
+    config: &CommonConfig,
+    raf_cfg: &RAFConfig,
+    msg: &TMLMessage,
+    state: InternalState,
+) {
     let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
     debug!("Decoded SLE PDU: {:?}", res);
@@ -311,7 +349,7 @@ fn parse_sle_message(config: &CommonConfig, msg: &TMLMessage, state: InternalSta
     match res {
         Ok(pdu) => {
             // check authentication
-            if !check_authentication(config, &pdu) {
+            if !check_authentication(config, raf_cfg, &pdu) {
                 error!("SLE PDU failed authentication");
                 // TODO: terminate the connection
             }
@@ -348,48 +386,64 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState) {
     }
 }
 
-fn check_authentication(config: &CommonConfig, pdu: &SlePdu) -> bool {
+fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePdu) -> bool {
     match config.auth_type {
-        SleAuthType::AuthNone => true,
-        SleAuthType::AuthBind => match pdu {
-            SlePdu::SleBindInvocation {
-                invoker_credentials,
-                initiator_identifier,
-                ..
-            } => {
-                match invoker_credentials {
+        SleAuthType::AuthNone =>
+        // in case we have not authentication configured, all is good
+        {
+            true
+        }
+        SleAuthType::AuthBind =>
+        // for AUTH_BIND, we need to only check the BIND and BIND RETURN invocations
+        {
+            match pdu {
+                SlePdu::SleBindInvocation {
+                    invoker_credentials,
+                    initiator_identifier,
+                    ..
+                } => match invoker_credentials {
                     Credentials::Unused => {
                         error!("BIND Authentication failed: AUTH_BIND requested, but BIND invocation does not contain credentials");
                         return false;
                     }
-                    Credentials::Used(isp1) => {
-                        // TODO real authentication needs password
-                        return check_credentials(isp1, initiator_identifier, "");
-                    }
-                }
-            }
-            SlePdu::SleBindReturn {
-                performer_credentials,
-                responder_identifier,
-                ..
-            } => {
-                match performer_credentials {
+                    Credentials::Used(isp1) => check_peer(config, isp1, initiator_identifier),
+                },
+                SlePdu::SleBindReturn {
+                    performer_credentials,
+                    responder_identifier,
+                    ..
+                } => match performer_credentials {
                     Credentials::Unused => {
-                        error!("BIND Authentication failed: AUTH_BIND requested, but BIND return does not contain credentials");
+                        error!("BIND Authentication failed: AUTH_BIND requested, but BIND RETURN does not contain credentials");
                         return false;
                     }
-                    Credentials::Used(isp1) => {
-                        // TODO real authentication needs password
-                        return check_credentials(isp1, responder_identifier, "");
-                    }
+                    Credentials::Used(isp1) => check_peer(config, isp1, responder_identifier),
+                },
+                _ => {
+                    // All other SLE PDUs are fine without authentication
+                    return true;
                 }
             }
-            _ => {
-                return true;
-            }
-        },
-        SleAuthType::AuthAll => {
-            return true;
+        }
+        SleAuthType::AuthAll => check_all(config, pdu),
+    }
+}
+
+fn check_all(_config: &CommonConfig, _pdu: &SlePdu) -> bool {
+    return true;
+}
+
+fn check_peer(config: &CommonConfig, isp1: &ISP1Credentials, identifier: &VisibleString) -> bool {
+    match config.get_peer(identifier) {
+        Some(peer) => {
+            return check_credentials(isp1, identifier, &peer.password);
+        }
+        None => {
+            error!(
+                "Peer '{}' is not configured, authentication failed!",
+                identifier.value.as_str()
+            );
+            return false;
         }
     }
 }
