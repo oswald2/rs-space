@@ -5,7 +5,7 @@ use rasn::types::{Utf8String, VisibleString};
 use rs_space_core::pus_types::HexBytes;
 use serde::{Deserialize, Serialize};
 
-use crate::{tml::config::TMLConfig, types::sle::SleVersion};
+use crate::tml::config::TMLConfig;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum HashToUse {
@@ -54,7 +54,6 @@ pub struct CommonConfig {
     pub password: Bytes,
     pub auth_type: SleAuthType,
     pub hash_to_use: HashToUse,
-    pub version: SleVersion,
     pub peer_map: HashMap<VisibleString, PeerASN1>,
 }
 
@@ -66,7 +65,6 @@ impl CommonConfig {
             password: Bytes::copy_from_slice(conf.password.as_ref()),
             auth_type: conf.auth_type,
             hash_to_use: conf.hash_to_use,
-            version: conf.version,
             peer_map: peer_set(&conf.peers),
         }
     }
@@ -84,7 +82,6 @@ pub struct CommonConfigExt {
     pub peers: Vec<Peer>,
     pub auth_type: SleAuthType,
     pub hash_to_use: HashToUse,
-    pub version: SleVersion,
 }
 
 impl CommonConfigExt {
@@ -132,7 +129,6 @@ impl Default for CommonConfigExt {
             peers: peer_vec,
             auth_type: SleAuthType::AuthNone,
             hash_to_use: HashToUse::SHA256,
-            version: SleVersion::V3,
         }
     }
 }

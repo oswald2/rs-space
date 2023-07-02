@@ -1,14 +1,19 @@
-use rasn::ber::de::Error;
-
+use bytes::Bytes;
+use rasn::{ber::de::Error, types::Utf8String, types::VisibleString};
+use rs_space_core::pus_types::HexBytes;
 use rs_space_sle::{
     asn1::*,
-    types::sle::{
-        new_service_instance_attribute, service_instance_identifier_to_string, RAF, RSL_FG, SAGR,
-        SPACK, string_to_service_instance_id,
+    sle::config::HashToUse,
+    types::{
+        aul::{HashInput, ISP1Credentials},
+        sle::{
+            new_service_instance_attribute, null_ccsds_time, service_instance_identifier_to_string,
+            string_to_service_instance_id, Credentials, RAF, RSL_FG, SAGR, SPACK,
+        },
     },
 };
 
-fn main() {
+fn bind_enc_test() {
     let bind_enc: Vec<u8> = vec![
         191, 100, 106, 128, 0, 26, 8, 83, 76, 69, 95, 85, 83, 69, 82, 26, 5, 53, 53, 53, 50, 57, 2,
         1, 0, 2, 1, 2, 48, 79, 49, 14, 48, 12, 6, 7, 43, 112, 4, 3, 1, 2, 52, 26, 1, 49, 49, 25,
@@ -67,4 +72,80 @@ fn main() {
     let sii3 = "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1";
     let parsed_sii3 = string_to_service_instance_id(sii3);
     println!("\nSII Parsing: {:?}", parsed_sii3);
+}
+
+fn isp1_test() {
+    let hi_comp = vec![
+        0x30, 0x19, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x0a,
+        0x1a, 0x04, 0x54, 0x65, 0x73, 0x74, 0x04, 0x04, 0x00, 0x01, 0x02, 0x03,
+    ];
+
+    let hi = HashInput::new(
+        &null_ccsds_time(),
+        10,
+        &VisibleString::new(Utf8String::from("Test")),
+        Bytes::copy_from_slice(&[0x00, 0x01, 0x02, 0x03]),
+    );
+
+    let enc_hi = rasn::der::encode(&hi);
+
+    println!(
+        "Encoded HashInput: {:?}\nShall be:             {:?}",
+        enc_hi, hi_comp
+    );
+
+    let test_prot_sha1 = HexBytes::from_str("6c06ff67a1092d5074a3399c16c0293633a31bf8");
+    let prot = hi.the_protected(HashToUse::SHA1);
+
+    let test_prot_sha256 =
+        HexBytes::from_str("3e3b6a42a56b9c9d4c23252392ba3985880940e7de963413015063713c3335a8");
+    let prot2 = hi.the_protected(HashToUse::SHA256);
+
+    println!(
+        "test: {:?}\nres:  {:?}",
+        test_prot_sha1,
+        HexBytes(Vec::from(prot))
+    );
+    println!(
+        "test2: {:?}\nres2:  {:?}",
+        test_prot_sha256,
+        HexBytes(Vec::from(prot2.clone()))
+    );
+
+    let isp1_test = HexBytes::from_str("302f0408000000000000000002010a04203e3b6a42a56b9c9d4c23252392ba3985880940e7de963413015063713c3335a8");
+
+    let isp1 = ISP1Credentials {
+        time: null_ccsds_time(),
+        random: 10,
+        the_protected: prot2,
+    };
+
+    let enc_isp = rasn::der::encode(&isp1).unwrap();
+
+    println!(
+        "ISP1 test: {:?}\nISP1 res:  {:?}",
+        isp1_test,
+        HexBytes(enc_isp.clone())
+    );
+
+    let test_creds = HexBytes::from_str("8131302f0408000000000000000002010a04203e3b6a42a56b9c9d4c23252392ba3985880940e7de963413015063713c3335a8");
+
+    let empty_creds = Credentials::Unused;
+    let enc_empty_creds = rasn::der::encode(&empty_creds);
+
+    println!("empty_creds: {:?}", HexBytes(enc_empty_creds.unwrap()));
+
+    let creds = Credentials::Used(isp1);
+    let enc_creds = rasn::der::encode(&creds);
+
+    println!(
+        "Credentials test: {:?}\nCredentials res:  {:?}",
+        test_creds,
+        HexBytes(enc_creds.unwrap())
+    );
+}
+
+fn main() {
+    bind_enc_test();
+    isp1_test();
 }

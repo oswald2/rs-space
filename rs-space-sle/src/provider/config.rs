@@ -36,6 +36,12 @@ impl Default for ProviderConfigExt {
     }
 }
 
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        ProviderConfig::from(ProviderConfigExt::default())
+    }
+}
+
 impl ProviderConfigExt {
     pub async fn read_from_file(filename: &Path) -> Result<ProviderConfig, Error> {
         let content = read_to_string(filename).await?;

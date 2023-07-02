@@ -199,13 +199,14 @@ impl RAFClient {
         let credentials = if common_config.auth_type == SleAuthType::AuthNone {
             Credentials::Unused
         } else {
-            Credentials::Used(ISP1Credentials::new(
+            let isp1 = ISP1Credentials::new(
                 common_config.hash_to_use,
                 &Time::now(TimeEncoding::CDS8),
                 self.rand.next_u32() as i32,
                 &common_config.authority_identifier,
                 &common_config.password,
-            ))
+            );
+            Credentials::Used(isp1)
         };
         credentials
     }
@@ -406,7 +407,7 @@ fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePd
                         error!("BIND Authentication failed: AUTH_BIND requested, but BIND invocation does not contain credentials");
                         return false;
                     }
-                    Credentials::Used(isp1) => check_peer(config, isp1, initiator_identifier),
+                    Credentials::Used(creds) => check_peer(config, creds, initiator_identifier),
                 },
                 SlePdu::SleBindReturn {
                     performer_credentials,
@@ -436,7 +437,7 @@ fn check_all(_config: &CommonConfig, _pdu: &SlePdu) -> bool {
 fn check_peer(config: &CommonConfig, isp1: &ISP1Credentials, identifier: &VisibleString) -> bool {
     match config.get_peer(identifier) {
         Some(peer) => {
-            return check_credentials(isp1, identifier, &peer.password);
+            return check_credentials(&isp1, identifier, &peer.password);
         }
         None => {
             error!(

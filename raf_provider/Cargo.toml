@@ -1,12 +1,15 @@
 [package]
-name = "bind_test"
+name = "raf_provider"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rs-space-sle = { path = "../rs-space-sle" }
 rs-space-core = { path = "../rs-space-core" }
+rs-space-sle = { path = "../rs-space-sle" }
+tokio = { version = "1.21.0", features = [ "full" ] }
+log = "0.4"
+log4rs = "1.0"
+rustop = "1.1"
 rasn = "0.7"
-bytes = "1.4.0"

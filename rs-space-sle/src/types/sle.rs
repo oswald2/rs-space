@@ -8,10 +8,12 @@ use nom::{
     IResult,
 };
 use rasn::{
-    types::{ConstOid, Implicit, ObjectIdentifier, SetOf, VisibleString},
-    AsnType, Decode, Encode,
+    types::{Class, ConstOid, Implicit, ObjectIdentifier, OctetString, SetOf, VisibleString},
+    AsnType, Decode, Encode, Tag,
 };
 use serde::{Deserialize, Serialize};
+
+use bytes::Bytes;
 
 use super::aul::ISP1Credentials;
 
@@ -44,37 +46,97 @@ pub enum Time {
     CcsdsPicoFormat(TimeCCSDSpico),
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-pub struct TimeCCSDS(Vec<u8>);
+//#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+pub type TimeCCSDS = OctetString;
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-pub struct TimeCCSDSpico(Vec<u8>);
-
-pub fn instant_to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, Error> {
-    Ok(TimeCCSDS(
-        time.encode(Some(rs_space_core::time::TimeEncoding::CDS8))?,
-    ))
+pub fn null_ccsds_time() -> TimeCCSDS {
+    Bytes::copy_from_slice(&[0; 8])
 }
 
-pub fn instant_to_ccsds_time_pico(
-    time: &rs_space_core::time::Time,
-) -> Result<TimeCCSDSpico, Error> {
-    Ok(TimeCCSDSpico(
-        time.encode(Some(rs_space_core::time::TimeEncoding::CDS10))?,
-    ))
+pub type TimeCCSDSpico = OctetString;
+
+pub fn to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, Error> {
+    let mut tmp = [0; 8];
+    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)?;
+    Ok(Bytes::copy_from_slice(&tmp))
+}
+
+pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSpico, Error> {
+    let mut tmp = [0; 10];
+    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)?;
+    Ok(Bytes::copy_from_slice(&tmp))
 }
 
 // ASN1 common types
 pub type ConditionalTime = Option<Time>;
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, PartialEq, Decode)]
 #[rasn(choice)]
 pub enum Credentials {
-    #[rasn(tag(context, 0))]
+    #[rasn(context, 0)]
     Unused,
-    #[rasn(tag(context, 1))]
+    #[rasn(context, 1)]
     Used(ISP1Credentials),
 }
+
+// Ok, for Credentials, we need to write our own encoder. This is because SLE does some weird ASN1 things.
+impl Encode for Credentials {
+    fn encode_with_tag<E: rasn::Encoder>(
+        &self,
+        encoder: &mut E,
+        _tag: rasn::Tag,
+    ) -> Result<(), E::Error> {
+        match self {
+            // Unused is a NULL value tagged with Context 0
+            Credentials::Unused => {
+                encoder.encode_null(Tag {
+                    class: Class::Context,
+                    value: 0,
+                })?;
+                Ok(())
+            }
+            // Used is an Octet String (the ASN1 encoded ISP1 Credentials) tagged with Context 1
+            Credentials::Used(isp1) => {
+                let content = rasn::der::encode(&isp1).unwrap();
+                encoder.encode_octet_string(
+                    Tag {
+                        class: Class::Context,
+                        value: 1,
+                    },
+                    &content,
+                )?;
+                Ok(())
+            }
+        }
+    }
+}
+
+// impl Decode for Credentials {
+//     fn decode_with_tag<D: rasn::Decoder>(decoder: &mut D, tag: Tag) -> Result<Self, D::Error> {
+//         println!("Decode for Credentials tag: {:?}", tag);
+        
+//         match tag {
+//             Tag {
+//                 class: Class::Context,
+//                 value: 0,
+//             } => Ok(Credentials::Unused),
+//             Tag {
+//                 class: Class::Context,
+//                 value: 1,
+//             } => {
+//                 let oct = decoder.decode_octet_string(Tag {
+//                     class: Class::Context,
+//                     value: 1,
+//                 })?;
+//                 match rasn::der::decode(&oct) {
+//                     Ok(isp1) => Ok(Credentials::Used(isp1)),
+//                     Err(err) => todo!()
+//                 }
+//             }
+//             _ => todo!(),
+//         }
+//     }
+// }
 
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;

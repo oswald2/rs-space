@@ -14,8 +14,8 @@ common:
     password: '12345678'
   - authority_id: SLETT
     password: aabbccddaabbccdd
-  auth_type: AuthNone
-  hash_to_use: SHA256
+  auth_type: AuthBind
+  hash_to_use: SHA1
 rafs:
 - hostname: localhost
   port: 5100

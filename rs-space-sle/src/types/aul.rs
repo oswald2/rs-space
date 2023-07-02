@@ -8,13 +8,13 @@ use sha1_smol::Sha1;
 
 use crate::sle::config::HashToUse;
 
-use super::sle::{instant_to_ccsds_time, TimeCCSDS};
+use super::sle::{to_ccsds_time, TimeCCSDS};
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct ISP1Credentials {
-    time: TimeCCSDS,
-    random: i32,
-    the_protected: Bytes,
+    pub time: TimeCCSDS,
+    pub random: i32,
+    pub the_protected: OctetString,
 }
 
 impl ISP1Credentials {
@@ -23,9 +23,9 @@ impl ISP1Credentials {
         time: &rs_space_core::time::Time,
         random: i32,
         name: &str,
-        password: &Bytes,
+        password: &[u8],
     ) -> ISP1Credentials {
-        let t = instant_to_ccsds_time(time).expect("Error encoding time to SLE CCSDS Time");
+        let t = to_ccsds_time(time).expect("Error encoding time to SLE CCSDS Time");
         let name = VisibleString::new(Utf8String::from(name));
         let password = Bytes::copy_from_slice(password.as_ref());
         let hi = HashInput::new(&t, random, &name, password);

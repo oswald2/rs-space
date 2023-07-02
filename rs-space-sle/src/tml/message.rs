@@ -3,7 +3,7 @@ use byteorder::{BigEndian, WriteBytesExt};
 use function_name::named;
 use log::debug;
 
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Write, IoSlice};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
 
@@ -145,12 +145,15 @@ impl TMLMessage {
     pub async fn write_to_async<T: AsyncWriteExt + Unpin>(&self, writer: &mut T) -> Result<(), Error> {
         debug!(function_name!());
 
-        writer.write_u8(self.msg_type as u8).await?;
-        writer.write(&[0,0,0]).await?;
+        let mut buf = [0; 8];
+
+        buf[0] = self.msg_type as u8;
+
+        let mut cursor = Cursor::new(&mut buf[4..]);
         let len: u32 = self.data.len() as u32;
-        writer.write_u32(len).await?;
-        writer.write_all(&self.data).await?;
-        writer.flush().await?;
+        WriteBytesExt::write_u32::<BigEndian>(&mut cursor, len).unwrap();
+
+        writer.write_vectored(&[IoSlice::new(&buf), IoSlice::new(&self.data)]).await?;
         Ok(())
     }
 
