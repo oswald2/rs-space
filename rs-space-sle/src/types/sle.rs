@@ -70,7 +70,7 @@ pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSp
 // ASN1 common types
 pub type ConditionalTime = Option<Time>;
 
-#[derive(AsnType, Debug, PartialEq, Decode)]
+#[derive(AsnType, Debug, PartialEq)]
 #[rasn(choice)]
 pub enum Credentials {
     #[rasn(context, 0)]
@@ -111,32 +111,26 @@ impl Encode for Credentials {
     }
 }
 
-// impl Decode for Credentials {
-//     fn decode_with_tag<D: rasn::Decoder>(decoder: &mut D, tag: Tag) -> Result<Self, D::Error> {
-//         println!("Decode for Credentials tag: {:?}", tag);
-        
-//         match tag {
-//             Tag {
-//                 class: Class::Context,
-//                 value: 0,
-//             } => Ok(Credentials::Unused),
-//             Tag {
-//                 class: Class::Context,
-//                 value: 1,
-//             } => {
-//                 let oct = decoder.decode_octet_string(Tag {
-//                     class: Class::Context,
-//                     value: 1,
-//                 })?;
-//                 match rasn::der::decode(&oct) {
-//                     Ok(isp1) => Ok(Credentials::Used(isp1)),
-//                     Err(err) => todo!()
-//                 }
-//             }
-//             _ => todo!(),
-//         }
-//     }
-// }
+impl Decode for Credentials {
+    fn decode_with_tag<D: rasn::Decoder>(decoder: &mut D, _tag: Tag) -> Result<Self, D::Error> {
+        match decoder.decode_null(Tag {
+            class: Class::Context,
+            value: 0,
+        }) {
+            Ok(_) => Ok(Credentials::Unused),
+            Err(_err) => {
+                let val = decoder.decode_octet_string(Tag {
+                    class: Class::Context,
+                    value: 1,
+                })?;
+                match rasn::der::decode(&val) {
+                    Ok(isp1) => Ok(Credentials::Used(isp1)),
+                    Err(_err) => Err(rasn::de::Error::no_valid_choice("ISP1Credentials")),
+                }
+            }
+        }
+    }
+}
 
 // #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub type ServiceInstanceIdentifier = Vec<ServiceInstanceAttribute>;

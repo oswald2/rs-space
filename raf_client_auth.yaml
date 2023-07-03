@@ -7,13 +7,15 @@ common:
     max_heartbeat: 3600
     min_dead_factor: 2
     max_dead_factor: 60
-  authority_identifier: PARAGONTT
-  password: 000102030405060708090a0b0c0d0e0f
+  authority_identifier: SLETT
+  password: aabbccddaabbccdd
   peers:
   - authority_id: EGSCC
     password: '12345678'
   - authority_id: SLETT
     password: aabbccddaabbccdd
+  - authority_id: PARAGONTT
+    password: 000102030405060708090a0b0c0d0e0f
   auth_type: AuthBind
   hash_to_use: SHA1
 rafs:

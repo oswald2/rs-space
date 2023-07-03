@@ -243,7 +243,7 @@ impl RAFClient {
         // Create the BIND SLE PDU
         let pdu = SlePdu::SleBindInvocation {
             invoker_credentials: credentials,
-            initiator_identifier: VisibleString::new(Utf8String::from(&config.initiator)),
+            initiator_identifier: common_config.authority_identifier.clone(),
             responder_port_identifier: VisibleString::new(Utf8String::from(&config.responder_port)),
             service_type: (ApplicationIdentifier::RtnAllFrames as i32).into(),
             version_number: config.version as u16,
