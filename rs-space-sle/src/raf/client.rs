@@ -35,6 +35,14 @@ pub enum SleMsg {
 
 type InternalTask = Option<JoinHandle<()>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum HandleType {
+    Bind,
+    Unbind,
+}
+
+type HandleVec = Arc<Mutex<Vec<(HandleType, JoinHandle<()>)>>>;
+
 pub struct RAFClient {
     chan: Sender<SleMsg>,
     cancellation_token: CancellationToken,
@@ -45,6 +53,7 @@ pub struct RAFClient {
     write_task: InternalTask,
     op_timeout: Duration,
     rand: ThreadRng,
+    handles: HandleVec,
 }
 
 type InternalState = Arc<Mutex<InternalRAFState>>;
@@ -79,6 +88,9 @@ impl RAFClient {
         let common_config = config.clone();
         let raf_config2 = raf_config.clone();
 
+        let handle_vec = Arc::new(Mutex::new(Vec::new()));
+        let handle_vec2 = handle_vec.clone();
+
         let hdl1 = tokio::spawn(async move {
             loop {
                 select!(
@@ -94,7 +106,7 @@ impl RAFClient {
                                 }
                                 else
                                 {
-                                    parse_sle_message(&common_config, &raf_config2, &msg, raf_state.clone());
+                                    parse_sle_message(&common_config, &raf_config2, &msg, raf_state.clone(), handle_vec2.clone());
                                 }
                             }
                         }
@@ -173,6 +185,7 @@ impl RAFClient {
             write_task: Some(hdl2),
             op_timeout: Duration::from_secs(raf_config.sle_operation_timeout as u64),
             rand: thread_rng(),
+            handles: handle_vec,
         };
 
         Ok(ret)
@@ -256,11 +269,14 @@ impl RAFClient {
         let timeout = Duration::from_secs(config.sle_operation_timeout as u64);
         let cancel = self.cancellation_token.clone();
 
-        tokio::spawn(async move {
-            tokio::time::sleep(timeout).await;
-            error!("Timeout waiting for BIND RESPONSE, terminating connection");
-            cancel.cancel();
-        });
+        self.handles.lock().unwrap().push((
+            HandleType::Bind,
+            tokio::spawn(async move {
+                tokio::time::sleep(timeout).await;
+                error!("Timeout waiting for BIND RESPONSE, terminating connection");
+                cancel.cancel();
+            }),
+        ));
 
         Ok(())
     }
@@ -301,11 +317,14 @@ impl RAFClient {
         let dur = self.op_timeout;
         let cancel = self.cancellation_token.clone();
 
-        tokio::spawn(async move {
-            tokio::time::sleep(dur).await;
-            error!("Timeout waiting for UNBIND RESPONSE, terminating connection");
-            cancel.cancel();
-        });
+        self.handles.lock().unwrap().push((
+            HandleType::Unbind,
+            tokio::spawn(async move {
+                tokio::time::sleep(dur).await;
+                error!("Timeout waiting for UNBIND RESPONSE, terminating connection");
+                cancel.cancel();
+            }),
+        ));
 
         Ok(())
     }
@@ -324,17 +343,26 @@ impl RAFClient {
     pub async fn cancel(&self) {
         self.cancellation_token.cancel();
     }
+
 }
 
-fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, String> {
-    match decode_sle_pdu(pdu) {
-        Err(err) => Err(format!("Error encoding PDU to ASN1: {}", err)),
-        Ok(val) => Ok(TMLMessage::new_with_data(val)),
+
+fn cancel_timer(op_type: HandleType, handle_vec: HandleVec) {
+    for (t, handle) in handle_vec.lock().unwrap().iter() {
+        if *t == op_type {
+            handle.abort();
+            return;
+        }
     }
 }
 
-fn decode_sle_pdu(pdu: SlePdu) -> Result<Vec<u8>, rasn::ber::enc::Error> {
-    rasn::der::encode(&pdu)
+
+
+fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, String> {
+    match rasn::der::encode(&pdu) {
+        Err(err) => Err(format!("Error encoding PDU to ASN1: {}", err)),
+        Ok(val) => Ok(TMLMessage::new_with_data(val)),
+    }
 }
 
 fn parse_sle_message(
@@ -342,6 +370,7 @@ fn parse_sle_message(
     raf_cfg: &RAFConfig,
     msg: &TMLMessage,
     state: InternalState,
+    handle_vec: HandleVec,
 ) {
     let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
@@ -356,7 +385,7 @@ fn parse_sle_message(
             }
 
             // then continue processing
-            process_sle_pdu(&pdu, state)
+            process_sle_pdu(&pdu, state, handle_vec)
         }
         Err(err) => {
             error!("Error on decoding SLE PDU: {err}");
@@ -364,13 +393,17 @@ fn parse_sle_message(
     }
 }
 
-fn process_sle_pdu(pdu: &SlePdu, state: InternalState) {
+fn process_sle_pdu(pdu: &SlePdu, state: InternalState, handle_vec: HandleVec) {
     match pdu {
         SlePdu::SleBindReturn {
             performer_credentials: _,
             responder_identifier,
             result,
         } => {
+            // We have a valid return, so cancel the timer waiting for the return 
+            cancel_timer(HandleType::Bind, handle_vec);
+
+            // Lock our state and process the BIND RETURN
             let mut lock = state.lock().expect("Mutex lock failed");
             lock.process_bind_return(&responder_identifier, result);
         }
@@ -378,6 +411,10 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState) {
             responder_credentials: _,
             result: _,
         } => {
+            // We have a valid return, so cancel the timer waiting for the return 
+            cancel_timer(HandleType::Unbind, handle_vec);
+
+            // Lock our state and process the UNBIND RETURN
             let mut lock = state.lock().expect("Mutex lock failed");
             lock.process_unbind();
         }
