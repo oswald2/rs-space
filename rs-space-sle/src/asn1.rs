@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use rasn::{types::*, AsnType, Decode, Encode};
 
-use crate::types::sle::{ServiceInstanceIdentifier, Credentials};
+use crate::types::sle::{ServiceInstanceIdentifier, Credentials, ConditionalTime};
 
 
 pub type DeliveryMode = i64;
@@ -17,6 +17,15 @@ pub type IntUnsignedShort = u16;
 pub type InvokeId = IntUnsignedShort;
 pub type ParameterName = i64;
 pub type SlduStatusNotification = i64;
+
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[rasn(enumerated)]
+pub enum RequestedFrameQuality {
+    GoodFramesOnly = 0,
+    ErredFramesOnly = 1, 
+    AllFrames = 2,
+}
+
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct SpaceLinkDataUnit(Vec<u8>);
@@ -106,7 +115,46 @@ pub enum SlePdu {
         #[rasn(tag(context, 0))]
         result: (),
     },
+    #[rasn(tag(context, 0))]
+    SleRafStartInvocation {
+        invoker_credentials: Credentials,
+        invoke_id: InvokeId,
+        start_time: ConditionalTime,
+        stop_time: ConditionalTime,
+        requested_frame_quality: RequestedFrameQuality,
+    },
+    #[rasn(tag(context, 2))]
+    SleRafStopInvocation {
+        invoker_credentials: Credentials,
+        invoke_id: InvokeId,
+    }
+   
 }
+
+
+// Placeholder for imported types. Replace these with the actual definitions.
+// type Credentials = (); // Placeholder
+// type InvokeId = (); // Placeholder
+// type ConditionalTime = (); // Placeholder
+// type SleScheduleStatusReportInvocation = (); // Placeholder
+// type SleStopInvocation = (); // Placeholder
+// type SleBindInvocation = (); // Placeholder
+// type SleBindReturn = (); // Placeholder
+// type SlePeerAbort = (); // Placeholder
+// type SleUnbindInvocation = (); // Placeholder
+// type SleUnbindReturn = (); // Placeholder
+// type RafParameterName = (); // Placeholder
+// type RequestedFrameQuality = (); // Placeholder
+
+// #[derive(AsnType, Debug, Clone, PartialEq)]
+// pub struct RafGetParameterInvocation {
+//     pub invoker_credentials: Credentials,
+//     pub invoke_id: InvokeId,
+//     pub raf_parameter: RafParameterName,
+// }
+
+
+
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]

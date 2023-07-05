@@ -43,7 +43,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
             .await
             .expect("failed to listen to CTRL-C event");
 
-        raf.stop().await;
+        raf.stop_processing().await;
     }
     Ok(())
 }

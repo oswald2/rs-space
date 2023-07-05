@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, io::Error};
+use std::collections::BTreeSet;
 
 use nom::{
     branch::alt,
@@ -55,20 +55,32 @@ pub fn null_ccsds_time() -> TimeCCSDS {
 
 pub type TimeCCSDSpico = OctetString;
 
-pub fn to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, Error> {
+pub fn to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, String> {
     let mut tmp = [0; 8];
-    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)?;
+    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)
+        .map_err(|x| format!("{x}"))?;
     Ok(Bytes::copy_from_slice(&tmp))
 }
 
-pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSpico, Error> {
+pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSpico, String> {
     let mut tmp = [0; 10];
-    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)?;
+    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)
+        .map_err(|x| format!("{x}"))?;
     Ok(Bytes::copy_from_slice(&tmp))
 }
 
 // ASN1 common types
 pub type ConditionalTime = Option<Time>;
+
+/// Convert a conditional Time value into a ConditionalTime SLE value
+pub fn to_conditional_ccsds_time(
+    time: Option<rs_space_core::time::Time>,
+) -> Result<Option<Time>, String> {
+    match time {
+        Some(t) => to_ccsds_time(&t).map(|x| Some(Time::CcsdsFormat(x))),
+        None => Ok(None),
+    }
+}
 
 #[derive(AsnType, Debug, PartialEq)]
 #[rasn(choice)]

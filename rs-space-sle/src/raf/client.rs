@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex};
 #[allow(unused)]
 use std::time::Duration;
@@ -13,7 +14,7 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::asn1::{ApplicationIdentifier, SlePdu, UnbindReason};
+use crate::asn1::{ApplicationIdentifier, RequestedFrameQuality, SlePdu, UnbindReason};
 use crate::raf::config::RAFConfig;
 use crate::raf::state::{InternalRAFState, RAFState};
 use crate::sle::config::{CommonConfig, SleAuthType};
@@ -21,7 +22,7 @@ use crate::sle::config::{CommonConfig, SleAuthType};
 use crate::tml::config::TMLConfig;
 use crate::tml::message::TMLMessage;
 use crate::types::aul::{check_credentials, ISP1Credentials};
-use crate::types::sle::{string_to_service_instance_id, Credentials};
+use crate::types::sle::{string_to_service_instance_id, to_conditional_ccsds_time, Credentials};
 use log::{debug, error};
 
 use function_name::named;
@@ -39,6 +40,8 @@ type InternalTask = Option<JoinHandle<()>>;
 enum HandleType {
     Bind,
     Unbind,
+    Start,
+    Stop,
 }
 
 type HandleVec = Arc<Mutex<Vec<(HandleType, JoinHandle<()>)>>>;
@@ -54,6 +57,7 @@ pub struct RAFClient {
     op_timeout: Duration,
     rand: ThreadRng,
     handles: HandleVec,
+    invoke_id: AtomicU16,
 }
 
 type InternalState = Arc<Mutex<InternalRAFState>>;
@@ -186,6 +190,7 @@ impl RAFClient {
             op_timeout: Duration::from_secs(raf_config.sle_operation_timeout as u64),
             rand: thread_rng(),
             handles: handle_vec,
+            invoke_id: AtomicU16::new(0),
         };
 
         Ok(ret)
@@ -329,7 +334,106 @@ impl RAFClient {
         Ok(())
     }
 
-    pub async fn stop(&mut self) {
+    pub async fn start(
+        &mut self,
+        common_config: &CommonConfig,
+        config: &RAFConfig,
+        start: Option<Time>,
+        stop: Option<Time>,
+        frame_quality: RequestedFrameQuality,
+    ) -> Result<(), String> {
+        // first check if we are in a correct state
+        let state;
+        {
+            let st = self
+                .state
+                .lock()
+                .expect("Error locking RAF internal state mutex");
+            state = st.get_state();
+        }
+        if state == RAFState::Unbound || state == RAFState::Active {
+            return Err("RAF START error: not in BOUND state".to_string());
+        };
+
+        // generate the credentials
+        let credentials = self.new_credentials(common_config);
+
+        let start_time = to_conditional_ccsds_time(start)?;
+        let stop_time = to_conditional_ccsds_time(stop)?;
+
+        // Create the RAF START SLE PDU
+        let pdu = SlePdu::SleRafStartInvocation {
+            invoker_credentials: credentials,
+            invoke_id: self.invoke_id.fetch_add(1, Ordering::AcqRel),
+            start_time: start_time,
+            stop_time: stop_time,
+            requested_frame_quality: frame_quality,
+        };
+
+        // And finally, send the PDU
+        self.send_pdu(pdu).await?;
+
+        let timeout = Duration::from_secs(config.sle_operation_timeout as u64);
+        let cancel = self.cancellation_token.clone();
+
+        self.handles.lock().unwrap().push((
+            HandleType::Start,
+            tokio::spawn(async move {
+                tokio::time::sleep(timeout).await;
+                error!("Timeout waiting for RAF START RESPONSE, terminating connection");
+                cancel.cancel();
+            }),
+        ));
+
+        Ok(())
+    }
+
+    pub async fn stop(
+        &mut self,
+        common_config: &CommonConfig,
+        config: &RAFConfig,
+    ) -> Result<(), String> {
+        // first check if we are in a correct state
+        let state;
+        {
+            let st = self
+                .state
+                .lock()
+                .expect("Error locking RAF internal state mutex");
+            state = st.get_state();
+        }
+        if state != RAFState::Active {
+            return Err("RAF STOP error: not in ACTIVE state".to_string());
+        };
+
+        // generate the credentials
+        let credentials = self.new_credentials(common_config);
+
+        // Create the RAF START SLE PDU
+        let pdu = SlePdu::SleRafStopInvocation {
+            invoker_credentials: credentials,
+            invoke_id: self.invoke_id.fetch_add(1, Ordering::AcqRel),
+        };
+
+        // And finally, send the PDU
+        self.send_pdu(pdu).await?;
+
+        let timeout = Duration::from_secs(config.sle_operation_timeout as u64);
+        let cancel = self.cancellation_token.clone();
+
+        self.handles.lock().unwrap().push((
+            HandleType::Stop,
+            tokio::spawn(async move {
+                tokio::time::sleep(timeout).await;
+                error!("Timeout waiting for RAF START RESPONSE, terminating connection");
+                cancel.cancel();
+            }),
+        ));
+
+        Ok(())
+    }
+
+    pub async fn stop_processing(&mut self) {
         let _ = self.chan.send(SleMsg::Stop).await;
         if let Some(handle) = self.write_task.take() {
             let _ = handle.await;
@@ -343,9 +447,7 @@ impl RAFClient {
     pub async fn cancel(&self) {
         self.cancellation_token.cancel();
     }
-
 }
-
 
 fn cancel_timer(op_type: HandleType, handle_vec: HandleVec) {
     for (t, handle) in handle_vec.lock().unwrap().iter() {
@@ -355,8 +457,6 @@ fn cancel_timer(op_type: HandleType, handle_vec: HandleVec) {
         }
     }
 }
-
-
 
 fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, String> {
     match rasn::der::encode(&pdu) {
@@ -400,7 +500,7 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState, handle_vec: HandleVec) {
             responder_identifier,
             result,
         } => {
-            // We have a valid return, so cancel the timer waiting for the return 
+            // We have a valid return, so cancel the timer waiting for the return
             cancel_timer(HandleType::Bind, handle_vec);
 
             // Lock our state and process the BIND RETURN
@@ -411,7 +511,7 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState, handle_vec: HandleVec) {
             responder_credentials: _,
             result: _,
         } => {
-            // We have a valid return, so cancel the timer waiting for the return 
+            // We have a valid return, so cancel the timer waiting for the return
             cancel_timer(HandleType::Unbind, handle_vec);
 
             // Lock our state and process the UNBIND RETURN
