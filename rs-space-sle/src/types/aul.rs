@@ -10,7 +10,7 @@ use crate::sle::config::HashToUse;
 
 use super::sle::{to_ccsds_time, TimeCCSDS};
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 pub struct ISP1Credentials {
     pub time: TimeCCSDS,
     pub random: i32,

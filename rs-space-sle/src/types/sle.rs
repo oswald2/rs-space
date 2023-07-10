@@ -8,7 +8,9 @@ use nom::{
     IResult,
 };
 use rasn::{
-    types::{Class, ConstOid, Implicit, ObjectIdentifier, OctetString, SetOf, VisibleString},
+    types::{
+        Class, ConstOid, Implicit, ObjectIdentifier, OctetString, SetOf, VisibleString,
+    },
     AsnType, Decode, Encode, Tag,
 };
 use serde::{Deserialize, Serialize};
@@ -37,13 +39,22 @@ impl TryFrom<u8> for SleVersion {
     }
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum Time {
     #[rasn(tag(0))]
     CcsdsFormat(TimeCCSDS),
     #[rasn(tag(1))]
     CcsdsPicoFormat(TimeCCSDSpico),
+}
+
+impl Time {
+    pub fn get_octet_string(&self) -> &OctetString {
+        match self {
+            Time::CcsdsFormat(x) => x,
+            Time::CcsdsPicoFormat(x) => x,
+        }
+    }
 }
 
 //#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
@@ -70,19 +81,78 @@ pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSp
 }
 
 // ASN1 common types
-pub type ConditionalTime = Option<Time>;
+#[derive(Debug, Clone, PartialEq, AsnType)]
+#[rasn(choice)]
+pub enum ConditionalTime {
+    #[rasn(context, 0)]
+    NoTime,
+    #[rasn(context, 1)]
+    HasTime(Time),
+}
 
 /// Convert a conditional Time value into a ConditionalTime SLE value
 pub fn to_conditional_ccsds_time(
     time: Option<rs_space_core::time::Time>,
-) -> Result<Option<Time>, String> {
+) -> Result<ConditionalTime, String> {
     match time {
-        Some(t) => to_ccsds_time(&t).map(|x| Some(Time::CcsdsFormat(x))),
-        None => Ok(None),
+        Some(t) => to_ccsds_time(&t).map(|x| ConditionalTime::HasTime(Time::CcsdsFormat(x))),
+        None => Ok(ConditionalTime::NoTime),
     }
 }
 
-#[derive(AsnType, Debug, PartialEq)]
+impl Encode for ConditionalTime {
+    fn encode_with_tag<E: rasn::Encoder>(
+        &self,
+        encoder: &mut E,
+        _tag: rasn::Tag,
+    ) -> Result<(), E::Error> {
+        match self {
+            ConditionalTime::NoTime => {
+                encoder.encode_null(Tag {
+                    class: Class::Context,
+                    value: 0,
+                })?;
+                Ok(())
+            }
+            ConditionalTime::HasTime(time) => {
+                encoder.encode_sequence_of(
+                    Tag {
+                        class: Class::Context,
+                        value: 1,
+                    },
+                    &[time],
+                )?;
+                Ok(())
+            }
+        }
+    }
+}
+
+
+impl Decode for ConditionalTime {
+    fn decode_with_tag<D: rasn::Decoder>(decoder: &mut D, _tag: Tag) -> Result<Self, D::Error> {
+        match decoder.decode_null(Tag {
+            class: Class::Context,
+            value: 0,
+        }) {
+            Ok(_) => Ok(ConditionalTime::NoTime),
+            Err(_err) => {
+                decoder.decode_sequence(Tag {class: Class::Context, value: 1}, |d| {
+                    match d.decode_octet_string(Tag { class: Class::Context, value: 0}) {
+                        Ok(val) => Ok(ConditionalTime::HasTime(Time::CcsdsFormat(Bytes::copy_from_slice(&val)))),
+                        Err(_err) => {
+                            let val = d.decode_octet_string(Tag { class: Class::Context, value: 1})?;
+                            Ok(ConditionalTime::HasTime(Time::CcsdsPicoFormat(Bytes::copy_from_slice(&val))))
+                        }
+                    }
+                })
+            }
+        }
+    }
+}
+
+
+#[derive(AsnType, Debug, Clone, PartialEq)]
 #[rasn(choice)]
 pub enum Credentials {
     #[rasn(context, 0)]
@@ -313,4 +383,29 @@ fn tcf_parser(input: &str) -> IResult<&str, &ConstOid> {
 fn tcva_parser(input: &str) -> IResult<&str, &ConstOid> {
     let (input, _) = tag_no_case("tcva")(input)?;
     Ok((input, &TCVA))
+}
+
+#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum PeerAbortDiagnostic {
+    #[rasn(tag(0))]
+    AccessDenied,
+    #[rasn(tag(1))]
+    UnexpectedResponderId,
+    #[rasn(tag(2))]
+    OperationalRequirement,
+    #[rasn(tag(3))]
+    ProtocolError,
+    #[rasn(tag(4))]
+    CommunicationsFailure,
+    #[rasn(tag(5))]
+    EncodingError,
+    #[rasn(tag(6))]
+    ReturnTimeout,
+    #[rasn(tag(7))]
+    EndOfServiceProvisionPeriod,
+    #[rasn(tag(8))]
+    UnsolicitedInvokeId,
+    #[rasn(tag(127))]
+    OtherReason,
 }

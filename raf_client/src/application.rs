@@ -1,6 +1,7 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
+use rs_space_sle::asn1::RequestedFrameQuality;
 use rs_space_sle::user::config::UserConfig;
 use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
@@ -20,15 +21,27 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         //std::thread::sleep(std::time::Duration::from_secs(2));
 
         info!("Sending SLE BIND...");
-        match raf.bind(&config.common, &config.rafs[0]).await {
-            Ok(_) => {}
-            Err(err) => {
-                error!("Bind returned error: {err}");
-                return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
-            }
+        if let Err(err) = raf.bind(&config.common, &config.rafs[0]).await {
+            error!("Bind returned error: {err}");
+            return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        info!("Starting SLE RAF service...");
+        if let Err(err) = raf.start(&config.common, &config.rafs[0], None, None, RequestedFrameQuality::AllFrames).await {
+            error!("RAF Start returned error: {err}");
+            return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
+        }
+
+        std::thread::sleep(std::time::Duration::from_secs(5));
+
+        info!("Stopping SLE RAF service...");
+        if let Err(err) = raf.stop(&config.common, &config.rafs[0]).await {
+            error!("RAF Start returned error: {err}");
+            return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
+        }
+
 
         info!("Sending SLE UNBIND...");
         match raf.unbind(&config.common, UnbindReason::End).await {

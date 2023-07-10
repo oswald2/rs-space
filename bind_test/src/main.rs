@@ -8,7 +8,8 @@ use rs_space_sle::{
         aul::{HashInput, ISP1Credentials},
         sle::{
             new_service_instance_attribute, null_ccsds_time, service_instance_identifier_to_string,
-            string_to_service_instance_id, Credentials, RAF, RSL_FG, SAGR, SPACK,
+            string_to_service_instance_id, ConditionalTime, Credentials, Time, RAF,
+            RSL_FG, SAGR, SPACK,
         },
     },
 };
@@ -145,7 +146,20 @@ fn isp1_test() {
     );
 }
 
+fn time_test() {
+    let t1 = ConditionalTime::HasTime(Time::CcsdsFormat(null_ccsds_time()));
+    let enc_t1 = rasn::der::encode(&t1).unwrap();
+
+    let t2: ConditionalTime = ConditionalTime::NoTime;
+    let enc_t2 = rasn::der::encode(&t2).unwrap();
+
+    println!("conditional time: {:?}", HexBytes(enc_t1));
+    println!("empty conditional time: {:?}", HexBytes(enc_t2));
+}
+
 fn main() {
     bind_enc_test();
     isp1_test();
+
+    time_test();
 }

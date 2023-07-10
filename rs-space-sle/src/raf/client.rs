@@ -14,7 +14,7 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::asn1::{ApplicationIdentifier, RequestedFrameQuality, SlePdu, UnbindReason};
+use crate::asn1::*;
 use crate::raf::config::RAFConfig;
 use crate::raf::state::{InternalRAFState, RAFState};
 use crate::sle::config::{CommonConfig, SleAuthType};
@@ -22,8 +22,8 @@ use crate::sle::config::{CommonConfig, SleAuthType};
 use crate::tml::config::TMLConfig;
 use crate::tml::message::TMLMessage;
 use crate::types::aul::{check_credentials, ISP1Credentials};
-use crate::types::sle::{string_to_service_instance_id, to_conditional_ccsds_time, Credentials};
-use log::{debug, error};
+use crate::types::sle::{string_to_service_instance_id, to_conditional_ccsds_time, Credentials, PeerAbortDiagnostic};
+use log::{debug, error, warn};
 
 use function_name::named;
 
@@ -81,6 +81,8 @@ impl RAFClient {
 
         let cfg: &TMLConfig = &config.tml;
         let timeout = cfg.heartbeat;
+        let timeout2 = timeout.clone();
+        let dead_factor2 = cfg.dead_factor.clone();
         let recv_timeout = cfg.heartbeat * cfg.dead_factor;
         let sii = raf_config.sii.clone();
         let sii2 = raf_config.sii.clone();
@@ -110,7 +112,7 @@ impl RAFClient {
                                 }
                                 else
                                 {
-                                    parse_sle_message(&common_config, &raf_config2, &msg, raf_state.clone(), handle_vec2.clone());
+                                    parse_sle_message(&common_config, &raf_config2, &msg, raf_state.clone(), handle_vec2.clone(), cancel1.clone());
                                 }
                             }
                         }
@@ -129,11 +131,14 @@ impl RAFClient {
             }
         });
 
-        // we initiated the connection, so send a context message
-        let ctxt = TMLMessage::context_message(cfg.heartbeat, cfg.dead_factor);
-        ctxt.write_to_async(&mut tx).await?;
-
         let hdl2 = tokio::spawn(async move {
+            // we initiated the connection, so send a context message
+            let ctxt = TMLMessage::context_message(timeout2, dead_factor2);
+            if let Err(err) = ctxt.write_to_async(&mut tx).await {
+                error!("Error sending SLE TML context message to provider: {err}");
+                return;
+            }
+
             loop {
                 select! {
                     res = receiver.recv() => {
@@ -174,6 +179,9 @@ impl RAFClient {
                         },
                         _ = cancel2.cancelled() => {
                             debug!("RAF client for {} has been cancelled (read task)", sii2);
+                            if let Ok(tml) = process_sle_msg(SlePdu::SlePeerAbort{ diagnostic: PeerAbortDiagnostic::OtherReason}, raf_state2.clone()) {
+                                let _ = tml.write_to_async(&mut tx).await;
+                            }
                             return;
                         }
 
@@ -471,17 +479,22 @@ fn parse_sle_message(
     msg: &TMLMessage,
     state: InternalState,
     handle_vec: HandleVec,
+    cancel_token: CancellationToken,
 ) {
     let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
     debug!("Decoded SLE PDU: {:?}", res);
 
     match res {
+        Ok(SlePdu::SlePeerAbort { diagnostic: diag }) => {
+            warn!("Received Peer Abort with diagnostic: {:?}", diag);
+            cancel_token.cancel();
+        }
         Ok(pdu) => {
             // check authentication
             if !check_authentication(config, raf_cfg, &pdu) {
                 error!("SLE PDU failed authentication");
-                // TODO: terminate the connection
+                cancel_token.cancel();
             }
 
             // then continue processing

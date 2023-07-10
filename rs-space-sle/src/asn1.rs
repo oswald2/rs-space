@@ -3,11 +3,10 @@ use std::collections::BTreeSet;
 
 use rasn::{types::*, AsnType, Decode, Encode};
 
-use crate::types::sle::{ServiceInstanceIdentifier, Credentials, ConditionalTime};
+use crate::types::sle::{ServiceInstanceIdentifier, Credentials, ConditionalTime, PeerAbortDiagnostic};
 
 
 pub type DeliveryMode = i64;
-pub type Diagnostics = i64;
 pub type Duration = IntUnsignedLong;
 pub type ForwardDuStatus = i64;
 pub type IntPosLong = u32;
@@ -72,7 +71,6 @@ pub enum BindDiagnostic {
 
 pub type IdentifierString = VisibleString;
 pub type LogicalPortName = VisibleString;
-pub type PeerAbortDiagnostic = i64;
 pub type PortId = LogicalPortName;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, AsnType, Decode, Encode)]
@@ -115,6 +113,10 @@ pub enum SlePdu {
         #[rasn(tag(context, 0))]
         result: (),
     },
+    #[rasn(tag(context,104))]
+    SlePeerAbort {
+        diagnostic: PeerAbortDiagnostic
+    },
     #[rasn(tag(context, 0))]
     SleRafStartInvocation {
         invoker_credentials: Credentials,
@@ -123,28 +125,26 @@ pub enum SlePdu {
         stop_time: ConditionalTime,
         requested_frame_quality: RequestedFrameQuality,
     },
+    #[rasn(tag(context, 1))]
+    SleRafStartReturn {
+        performer_credentials: Credentials,
+        invoke_id: InvokeId,
+        result: RafStartReturnResult,
+    },
     #[rasn(tag(context, 2))]
     SleRafStopInvocation {
         invoker_credentials: Credentials,
         invoke_id: InvokeId,
+    },
+    #[rasn(tag(context, 3))]
+    SleAcknowledgement {
+        credentials: Credentials,
+        invoke_id: InvokeId,
+        result: SleResult,
     }
-   
 }
 
 
-// Placeholder for imported types. Replace these with the actual definitions.
-// type Credentials = (); // Placeholder
-// type InvokeId = (); // Placeholder
-// type ConditionalTime = (); // Placeholder
-// type SleScheduleStatusReportInvocation = (); // Placeholder
-// type SleStopInvocation = (); // Placeholder
-// type SleBindInvocation = (); // Placeholder
-// type SleBindReturn = (); // Placeholder
-// type SlePeerAbort = (); // Placeholder
-// type SleUnbindInvocation = (); // Placeholder
-// type SleUnbindReturn = (); // Placeholder
-// type RafParameterName = (); // Placeholder
-// type RequestedFrameQuality = (); // Placeholder
 
 // #[derive(AsnType, Debug, Clone, PartialEq)]
 // pub struct RafGetParameterInvocation {
@@ -165,5 +165,57 @@ pub enum BindResult {
     BindDiag(BindDiagnostic),
 }
 
-pub type SlePeerAbort = PeerAbortDiagnostic;
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum Diagnostics {
+    #[rasn(tag(100))]
+    DuplicateInvokeId = 100,
+    #[rasn(tag(127))]
+    OtherReason = 127,
+}
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum DiagnosticRafStart {
+    #[rasn(tag(0))]
+    Common(Diagnostics),
+    #[rasn(tag(1))]
+    Specific(SpecificDiagnosticRafStart),
+}
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum SpecificDiagnosticRafStart {
+    #[rasn(tag(0))]
+    OutOfService = 0,
+    #[rasn(tag(1))]
+    UnableToComply = 1,
+    #[rasn(tag(2))]
+    InvalidStartTime = 2,
+    #[rasn(tag(3))]
+    InvalidStopTime = 3,
+    #[rasn(tag(4))]
+    MissingTimeValue = 4,
+}
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum RafStartReturnResult {
+    #[rasn(tag(0))]
+    PositiveResult,
+    #[rasn(tag(1))]
+    NegativeResult(DiagnosticRafStart),
+}
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum SleResult {
+    #[rasn(tag(0))]
+    PositiveResult,
+    #[rasn(tag(1))]
+    NegativeResult(Diagnostics)
+}
+
+
 

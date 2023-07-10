@@ -202,8 +202,7 @@ SleBindReturn           ::=   SEQUENCE
    }
 }
 SlePeerAbort            ::=   PeerAbortDiagnostic
-CCSDS 911.1-B-4                    Page A-6                       August 2016
-             CCSDS RECOMMENDED STANDARD FOR SLE RAF SERVICE
+
 SleUnbindInvocation     ::=    SEQUENCE
 { invokerCredentials       Credentials
 , unbindReason             UnbindReason
@@ -271,6 +270,7 @@ PeerAbortDiagnostic           ::=    INTEGER
 -- (128 .. 255) is reserved for diagnostic codes
 -- that are specific to the communications technology used.
 }
+
 PortId               ::=   LogicalPortName
 UnbindReason         ::=   INTEGER
 { end                   (0)
