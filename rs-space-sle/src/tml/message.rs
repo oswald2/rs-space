@@ -35,7 +35,7 @@ impl TryFrom<u8> for TMLMessageType {
 #[derive(Debug)]
 pub struct TMLMessage {
     pub msg_type: TMLMessageType,
-    pub length: u32,
+    length: u32,
     pub data: Vec<u8>,
 }
 
@@ -154,6 +154,7 @@ impl TMLMessage {
         WriteBytesExt::write_u32::<BigEndian>(&mut cursor, len).unwrap();
 
         writer.write_vectored(&[IoSlice::new(&buf), IoSlice::new(&self.data)]).await?;
+        writer.flush().await?;
         Ok(())
     }
 

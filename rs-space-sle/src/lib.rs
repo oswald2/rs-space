@@ -10,6 +10,7 @@ pub mod raf {
     pub mod client;
     pub mod config;
     pub mod state;
+    pub mod asn1;
 }
 pub mod sle {
     pub mod config;

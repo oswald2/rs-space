@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use crate::asn1::*;
 use crate::raf::config::RAFConfig;
 use crate::raf::state::{InternalRAFState, RAFState};
+use crate::raf::asn1::{RequestedFrameQuality};
 use crate::sle::config::{CommonConfig, SleAuthType};
 // use crate::pdu::PDU;
 use crate::tml::config::TMLConfig;
@@ -375,7 +376,7 @@ impl RAFClient {
             invoke_id: self.invoke_id.fetch_add(1, Ordering::AcqRel),
             start_time: start_time,
             stop_time: stop_time,
-            requested_frame_quality: frame_quality,
+            requested_frame_quality: (frame_quality as u32).into(),
         };
 
         // And finally, send the PDU
@@ -492,7 +493,7 @@ fn parse_sle_message(
         }
         Ok(pdu) => {
             // check authentication
-            if !check_authentication(config, raf_cfg, &pdu) {
+            if !check_authentication(config, raf_cfg, state.clone(), &pdu) {
                 error!("SLE PDU failed authentication");
                 cancel_token.cancel();
             }
@@ -531,13 +532,34 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState, handle_vec: HandleVec) {
             let mut lock = state.lock().expect("Mutex lock failed");
             lock.process_unbind();
         }
+        SlePdu::SleRafStartReturn { 
+            performer_credentials: _,
+            invoke_id: _,
+            result,
+        } => {
+            cancel_timer(HandleType::Start, handle_vec);
+
+            let mut lock = state.lock().expect("Mutex lock failed");
+            lock.process_start(result);
+        }
+        SlePdu::SleAcknowledgement {
+            credentials: _,
+            invoke_id: _,
+            result,
+            } => {
+                cancel_timer(HandleType::Stop, handle_vec);
+
+                let mut lock = state.lock().expect("Mutex lock failed");
+                lock.process_stop(result);
+                }
+
         pdu => {
             debug!("Received: {:?}", pdu);
         }
     }
 }
 
-fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePdu) -> bool {
+fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, state: InternalState, pdu: &SlePdu) -> bool {
     match config.auth_type {
         SleAuthType::AuthNone =>
         // in case we have not authentication configured, all is good
@@ -557,7 +579,7 @@ fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePd
                         error!("BIND Authentication failed: AUTH_BIND requested, but BIND invocation does not contain credentials");
                         return false;
                     }
-                    Credentials::Used(creds) => check_peer(config, creds, initiator_identifier),
+                    Credentials::Used(creds) => check_peer(config, creds, initiator_identifier, "BIND"),
                 },
                 SlePdu::SleBindReturn {
                     performer_credentials,
@@ -568,7 +590,7 @@ fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePd
                         error!("BIND Authentication failed: AUTH_BIND requested, but BIND RETURN does not contain credentials");
                         return false;
                     }
-                    Credentials::Used(isp1) => check_peer(config, isp1, responder_identifier),
+                    Credentials::Used(isp1) => check_peer(config, isp1, responder_identifier, "BIND RETURN"),
                 },
                 _ => {
                     // All other SLE PDUs are fine without authentication
@@ -576,18 +598,46 @@ fn check_authentication(config: &CommonConfig, _raf_cfg: &RAFConfig, pdu: &SlePd
                 }
             }
         }
-        SleAuthType::AuthAll => check_all(config, pdu),
+        SleAuthType::AuthAll => check_all(config, state, pdu),
     }
 }
 
-fn check_all(_config: &CommonConfig, _pdu: &SlePdu) -> bool {
-    return true;
+fn check_all(config: &CommonConfig, state: InternalState, pdu: &SlePdu) -> bool {
+    let credentials = pdu.get_credentials();
+
+    match credentials {
+        Some(creds) => {
+            match creds {
+                Credentials::Unused => {
+                    error!("Authentication failed, no credentials provided");
+                    return false;
+                }
+                Credentials::Used(isp1) => {
+                    let name;
+                    {
+                        let lock = state.lock().expect("Mutex lock failed");
+                        name = lock.provider().clone();
+                    }
+                    let op_name = pdu.operation_name();
+                    return check_peer(config, isp1, &name, op_name);
+                }
+            }
+        }
+        None => { 
+            return true;
+        }
+    }
 }
 
-fn check_peer(config: &CommonConfig, isp1: &ISP1Credentials, identifier: &VisibleString) -> bool {
+fn check_peer(config: &CommonConfig, isp1: &ISP1Credentials, identifier: &VisibleString, op_name: &str) -> bool {
     match config.get_peer(identifier) {
         Some(peer) => {
-            return check_credentials(&isp1, identifier, &peer.password);
+            if !check_credentials(&isp1, identifier, &peer.password)
+            {
+                error!("{}: authentication failed", op_name);
+                return false; 
+            }
+            return true;
         }
         None => {
             error!(

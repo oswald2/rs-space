@@ -3,8 +3,11 @@ use std::collections::BTreeSet;
 
 use rasn::{types::*, AsnType, Decode, Encode};
 
-use crate::types::sle::{ServiceInstanceIdentifier, Credentials, ConditionalTime, PeerAbortDiagnostic};
+use crate::types::sle::{
+    ConditionalTime, Credentials, Diagnostics, PeerAbortDiagnostic, ServiceInstanceIdentifier,
+};
 
+use crate::raf::asn1::{RafStartReturnResult};
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -16,14 +19,6 @@ pub type IntUnsignedShort = u16;
 pub type InvokeId = IntUnsignedShort;
 pub type ParameterName = i64;
 pub type SlduStatusNotification = i64;
-
-#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
-#[rasn(enumerated)]
-pub enum RequestedFrameQuality {
-    GoodFramesOnly = 0,
-    ErredFramesOnly = 1, 
-    AllFrames = 2,
-}
 
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
@@ -113,17 +108,15 @@ pub enum SlePdu {
         #[rasn(tag(context, 0))]
         result: (),
     },
-    #[rasn(tag(context,104))]
-    SlePeerAbort {
-        diagnostic: PeerAbortDiagnostic
-    },
+    #[rasn(tag(context, 104))]
+    SlePeerAbort { diagnostic: PeerAbortDiagnostic },
     #[rasn(tag(context, 0))]
     SleRafStartInvocation {
         invoker_credentials: Credentials,
         invoke_id: InvokeId,
         start_time: ConditionalTime,
         stop_time: ConditionalTime,
-        requested_frame_quality: RequestedFrameQuality,
+        requested_frame_quality: Integer,
     },
     #[rasn(tag(context, 1))]
     SleRafStartReturn {
@@ -141,9 +134,38 @@ pub enum SlePdu {
         credentials: Credentials,
         invoke_id: InvokeId,
         result: SleResult,
-    }
+    },
 }
 
+impl SlePdu {
+    pub fn get_credentials(&self) -> Option<&Credentials> {
+        match self {
+            SlePdu::SleBindInvocation { invoker_credentials, ..} => Some(&invoker_credentials),
+            SlePdu::SleBindReturn { performer_credentials, ..} => Some(&performer_credentials),
+            SlePdu::SleUnbindInvocation { invoker_credentials, ..} => Some(&invoker_credentials),
+            SlePdu::SleUnbindReturn { responder_credentials, .. } => Some(&responder_credentials),
+            SlePdu::SlePeerAbort {..} => None,
+            SlePdu::SleRafStartInvocation { invoker_credentials, .. } => Some(&invoker_credentials),
+            SlePdu::SleRafStartReturn { performer_credentials, .. } => Some(&performer_credentials),
+            SlePdu::SleRafStopInvocation { invoker_credentials, .. } => Some(&invoker_credentials),
+            SlePdu::SleAcknowledgement { credentials, .. } => Some(&credentials),
+        }
+    }
+
+    pub fn operation_name(&self) -> &str {
+        match self {
+            SlePdu::SleBindInvocation { ..} => "BIND",
+            SlePdu::SleBindReturn { ..} => "BIND RETURN",
+            SlePdu::SleUnbindInvocation { ..} => "UNBIND",
+            SlePdu::SleUnbindReturn { .. } => "UNBIND RETURN",
+            SlePdu::SlePeerAbort {..} => "PEER ABORT",
+            SlePdu::SleRafStartInvocation { .. } => "RAF START",
+            SlePdu::SleRafStartReturn {  .. } => "RAF START RETURN",
+            SlePdu::SleRafStopInvocation {  .. } => "RAF STOP",
+            SlePdu::SleAcknowledgement {  .. } => "RAF STOP RETURN",
+        }
+    }
+}
 
 
 // #[derive(AsnType, Debug, Clone, PartialEq)]
@@ -152,9 +174,6 @@ pub enum SlePdu {
 //     pub invoke_id: InvokeId,
 //     pub raf_parameter: RafParameterName,
 // }
-
-
-
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
@@ -165,57 +184,11 @@ pub enum BindResult {
     BindDiag(BindDiagnostic),
 }
 
-
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-#[rasn(choice)]
-pub enum Diagnostics {
-    #[rasn(tag(100))]
-    DuplicateInvokeId = 100,
-    #[rasn(tag(127))]
-    OtherReason = 127,
-}
-
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-#[rasn(choice)]
-pub enum DiagnosticRafStart {
-    #[rasn(tag(0))]
-    Common(Diagnostics),
-    #[rasn(tag(1))]
-    Specific(SpecificDiagnosticRafStart),
-}
-
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-#[rasn(choice)]
-pub enum SpecificDiagnosticRafStart {
-    #[rasn(tag(0))]
-    OutOfService = 0,
-    #[rasn(tag(1))]
-    UnableToComply = 1,
-    #[rasn(tag(2))]
-    InvalidStartTime = 2,
-    #[rasn(tag(3))]
-    InvalidStopTime = 3,
-    #[rasn(tag(4))]
-    MissingTimeValue = 4,
-}
-
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
-#[rasn(choice)]
-pub enum RafStartReturnResult {
-    #[rasn(tag(0))]
-    PositiveResult,
-    #[rasn(tag(1))]
-    NegativeResult(DiagnosticRafStart),
-}
-
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum SleResult {
     #[rasn(tag(0))]
     PositiveResult,
     #[rasn(tag(1))]
-    NegativeResult(Diagnostics)
+    NegativeResult(Diagnostics),
 }
-
-
-

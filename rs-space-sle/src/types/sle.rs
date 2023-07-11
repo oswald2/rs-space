@@ -409,3 +409,13 @@ pub enum PeerAbortDiagnostic {
     #[rasn(tag(127))]
     OtherReason,
 }
+
+
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum Diagnostics {
+    #[rasn(tag(100))]
+    DuplicateInvokeId = 100,
+    #[rasn(tag(127))]
+    OtherReason = 127,
+}
