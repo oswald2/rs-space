@@ -2,8 +2,7 @@ use log::{error, info};
 
 use crate::asn1::{BindResult, SleResult};
 use crate::raf::asn1::RafStartReturnResult;
-use rasn::types::{VisibleString, Utf8String};
-
+use rasn::types::{Utf8String, VisibleString};
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RAFState {
@@ -22,8 +21,8 @@ pub struct InternalRAFState {
 impl InternalRAFState {
     pub fn new() -> Self {
         InternalRAFState {
-            state: RAFState::Unbound, 
-            provider: VisibleString::new(Utf8String::from(""))
+            state: RAFState::Unbound,
+            provider: VisibleString::new(Utf8String::from("")),
         }
     }
 
@@ -34,7 +33,10 @@ impl InternalRAFState {
     pub fn process_bind_return(&mut self, responder: &VisibleString, result: &BindResult) {
         match result {
             BindResult::BindOK(_) => {
-                info!("BIND operation successful from responder {}", responder.value);
+                info!(
+                    "BIND operation successful from responder {}",
+                    responder.value
+                );
                 self.state = RAFState::Bound;
                 self.provider = responder.clone();
             }

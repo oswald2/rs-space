@@ -7,7 +7,7 @@ use crate::types::sle::{
     ConditionalTime, Credentials, Diagnostics, PeerAbortDiagnostic, ServiceInstanceIdentifier,
 };
 
-use crate::raf::asn1::{RafStartReturnResult};
+use crate::raf::asn1::RafStartReturnResult;
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -19,7 +19,6 @@ pub type IntUnsignedShort = u16;
 pub type InvokeId = IntUnsignedShort;
 pub type ParameterName = i64;
 pub type SlduStatusNotification = i64;
-
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct SpaceLinkDataUnit(Vec<u8>);
@@ -140,33 +139,53 @@ pub enum SlePdu {
 impl SlePdu {
     pub fn get_credentials(&self) -> Option<&Credentials> {
         match self {
-            SlePdu::SleBindInvocation { invoker_credentials, ..} => Some(&invoker_credentials),
-            SlePdu::SleBindReturn { performer_credentials, ..} => Some(&performer_credentials),
-            SlePdu::SleUnbindInvocation { invoker_credentials, ..} => Some(&invoker_credentials),
-            SlePdu::SleUnbindReturn { responder_credentials, .. } => Some(&responder_credentials),
-            SlePdu::SlePeerAbort {..} => None,
-            SlePdu::SleRafStartInvocation { invoker_credentials, .. } => Some(&invoker_credentials),
-            SlePdu::SleRafStartReturn { performer_credentials, .. } => Some(&performer_credentials),
-            SlePdu::SleRafStopInvocation { invoker_credentials, .. } => Some(&invoker_credentials),
+            SlePdu::SleBindInvocation {
+                invoker_credentials,
+                ..
+            } => Some(&invoker_credentials),
+            SlePdu::SleBindReturn {
+                performer_credentials,
+                ..
+            } => Some(&performer_credentials),
+            SlePdu::SleUnbindInvocation {
+                invoker_credentials,
+                ..
+            } => Some(&invoker_credentials),
+            SlePdu::SleUnbindReturn {
+                responder_credentials,
+                ..
+            } => Some(&responder_credentials),
+            SlePdu::SlePeerAbort { .. } => None,
+            SlePdu::SleRafStartInvocation {
+                invoker_credentials,
+                ..
+            } => Some(&invoker_credentials),
+            SlePdu::SleRafStartReturn {
+                performer_credentials,
+                ..
+            } => Some(&performer_credentials),
+            SlePdu::SleRafStopInvocation {
+                invoker_credentials,
+                ..
+            } => Some(&invoker_credentials),
             SlePdu::SleAcknowledgement { credentials, .. } => Some(&credentials),
         }
     }
 
     pub fn operation_name(&self) -> &str {
         match self {
-            SlePdu::SleBindInvocation { ..} => "BIND",
-            SlePdu::SleBindReturn { ..} => "BIND RETURN",
-            SlePdu::SleUnbindInvocation { ..} => "UNBIND",
+            SlePdu::SleBindInvocation { .. } => "BIND",
+            SlePdu::SleBindReturn { .. } => "BIND RETURN",
+            SlePdu::SleUnbindInvocation { .. } => "UNBIND",
             SlePdu::SleUnbindReturn { .. } => "UNBIND RETURN",
-            SlePdu::SlePeerAbort {..} => "PEER ABORT",
+            SlePdu::SlePeerAbort { .. } => "PEER ABORT",
             SlePdu::SleRafStartInvocation { .. } => "RAF START",
-            SlePdu::SleRafStartReturn {  .. } => "RAF START RETURN",
-            SlePdu::SleRafStopInvocation {  .. } => "RAF STOP",
-            SlePdu::SleAcknowledgement {  .. } => "RAF STOP RETURN",
+            SlePdu::SleRafStartReturn { .. } => "RAF START RETURN",
+            SlePdu::SleRafStopInvocation { .. } => "RAF STOP",
+            SlePdu::SleAcknowledgement { .. } => "RAF STOP RETURN",
         }
     }
 }
-
 
 // #[derive(AsnType, Debug, Clone, PartialEq)]
 // pub struct RafGetParameterInvocation {

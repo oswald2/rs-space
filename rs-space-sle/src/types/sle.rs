@@ -8,9 +8,7 @@ use nom::{
     IResult,
 };
 use rasn::{
-    types::{
-        Class, ConstOid, Implicit, ObjectIdentifier, OctetString, SetOf, VisibleString,
-    },
+    types::{Class, ConstOid, Implicit, ObjectIdentifier, OctetString, SetOf, VisibleString},
     AsnType, Decode, Encode, Tag,
 };
 use serde::{Deserialize, Serialize};
@@ -128,7 +126,6 @@ impl Encode for ConditionalTime {
     }
 }
 
-
 impl Decode for ConditionalTime {
     fn decode_with_tag<D: rasn::Decoder>(decoder: &mut D, _tag: Tag) -> Result<Self, D::Error> {
         match decoder.decode_null(Tag {
@@ -136,21 +133,32 @@ impl Decode for ConditionalTime {
             value: 0,
         }) {
             Ok(_) => Ok(ConditionalTime::NoTime),
-            Err(_err) => {
-                decoder.decode_sequence(Tag {class: Class::Context, value: 1}, |d| {
-                    match d.decode_octet_string(Tag { class: Class::Context, value: 0}) {
-                        Ok(val) => Ok(ConditionalTime::HasTime(Time::CcsdsFormat(Bytes::copy_from_slice(&val)))),
-                        Err(_err) => {
-                            let val = d.decode_octet_string(Tag { class: Class::Context, value: 1})?;
-                            Ok(ConditionalTime::HasTime(Time::CcsdsPicoFormat(Bytes::copy_from_slice(&val))))
-                        }
+            Err(_err) => decoder.decode_sequence(
+                Tag {
+                    class: Class::Context,
+                    value: 1,
+                },
+                |d| match d.decode_octet_string(Tag {
+                    class: Class::Context,
+                    value: 0,
+                }) {
+                    Ok(val) => Ok(ConditionalTime::HasTime(Time::CcsdsFormat(
+                        Bytes::copy_from_slice(&val),
+                    ))),
+                    Err(_err) => {
+                        let val = d.decode_octet_string(Tag {
+                            class: Class::Context,
+                            value: 1,
+                        })?;
+                        Ok(ConditionalTime::HasTime(Time::CcsdsPicoFormat(
+                            Bytes::copy_from_slice(&val),
+                        )))
                     }
-                })
-            }
+                },
+            ),
         }
     }
 }
-
 
 #[derive(AsnType, Debug, Clone, PartialEq)]
 #[rasn(choice)]
@@ -409,7 +417,6 @@ pub enum PeerAbortDiagnostic {
     #[rasn(tag(127))]
     OtherReason,
 }
-
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]

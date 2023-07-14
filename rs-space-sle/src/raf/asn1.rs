@@ -3,8 +3,7 @@ use std::collections::BTreeSet;
 
 use rasn::{AsnType, Decode, Encode};
 
-use crate::types::sle::{Diagnostics};
-
+use crate::types::sle::Diagnostics;
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(enumerated)]
@@ -22,7 +21,7 @@ impl TryFrom<u32> for RequestedFrameQuality {
             0 => Ok(RequestedFrameQuality::GoodFramesOnly),
             1 => Ok(RequestedFrameQuality::ErredFramesOnly),
             2 => Ok(RequestedFrameQuality::AllFrames),
-            x => Err(format!("Requested frame quality has unexpected value: {x}"))
+            x => Err(format!("Requested frame quality has unexpected value: {x}")),
         }
     }
 }
@@ -59,4 +58,3 @@ pub enum RafStartReturnResult {
     #[rasn(tag(1))]
     NegativeResult(DiagnosticRafStart),
 }
-
