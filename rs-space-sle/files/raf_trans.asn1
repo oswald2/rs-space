@@ -1,0 +1,78 @@
+
+
+AntennaId                    ::= CHOICE
+{    globalForm                       [0] OBJECT IDENTIFIER
+,    localForm                        [1] OCTET STRING (SIZE (1 .. 16))
+}
+
+FrameQuality               ::= INTEGER
+{   good                             (0)
+,   erred                            (1)
+,   undetermined                     (2)
+}
+
+FrameSyncLockStatus        ::=   LockStatus
+( inLock
+| outOfLock
+| unknown
+)
+LockStatus                 ::= INTEGER
+{   inLock                           (0)
+,   outOfLock                        (1)
+,   notInUse                         (2)
+,   unknown                          (3)
+}
+
+CarrierLockStatus     ::=   LockStatus
+( inLock
+| outOfLock
+| unknown
+)
+
+SymbolLockStatus        ::=   LockStatus
+( inLock
+| outOfLock
+| unknown
+)
+
+LockStatusReport            ::= SEQUENCE
+{   time                             Time
+,   carrierLockStatus                CarrierLockStatus
+,   subcarrierLockStatus             LockStatus
+,   symbolSyncLockStatus             SymbolLockStatus
+}
+Notification                ::= CHOICE
+{   lossFrameSync                    [0] LockStatusReport
+,   productionStatusChange           [1] RafProductionStatus
+,   excessiveDataBacklog             [2] NULL
+,   endOfData                        [3] NULL
+}
+
+
+FrameOrNotification             ::= CHOICE
+{   annotatedFrame                       [0] RafTransferDataInvocation
+,   syncNotification                     [1] RafSyncNotifyInvocation
+}
+
+RafTransferDataInvocation   ::= SEQUENCE
+{   invokerCredentials               Credentials
+,   earthReceiveTime                 Time
+,   antennaId                        AntennaId
+,   dataLinkContinuity               INTEGER (-1 .. 16777215)
+,   deliveredFrameQuality            FrameQuality
+,   privateAnnotation                CHOICE
+    {   null                             [0] NULL
+    ,   notNull                          [1] OCTET STRING (SIZE (1 .. 128))
+    }
+,   data                             SpaceLinkDataUnit
+}
+
+RafTransferBuffer               ::= SEQUENCE OF FrameOrNotification
+
+RafSyncNotifyInvocation         ::= SEQUENCE
+{   invokerCredentials                   Credentials
+,   notification                         Notification
+}
+
+SpaceLinkDataUnit        ::=    OCTET STRING (SIZE (1 .. 65536))
+

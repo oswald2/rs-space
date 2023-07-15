@@ -34,7 +34,10 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
             return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        // std::thread::sleep(std::time::Duration::from_secs(5));
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen to CTRL-C event");
 
         info!("Stopping SLE RAF service...");
         if let Err(err) = raf.stop(&config.common, &config.rafs[0]).await {
@@ -51,10 +54,6 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
                 return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
             }
         }
-
-        // tokio::signal::ctrl_c()
-        //     .await
-        //     .expect("failed to listen to CTRL-C event");
 
         raf.stop_processing().await;
     }

@@ -136,11 +136,15 @@ SlduStatusNotification ::=      INTEGER
 { produceNotification              (0)
 , doNotProduceNotification         (1)
 }
+
 SpaceLinkDataUnit        ::=    OCTET STRING (SIZE (1 .. 65536))
+
 Time                      ::=   CHOICE
 { ccsdsFormat         [0]    TimeCCSDS
 , ccsdsPicoFormat     [1]    TimeCCSDSpico
 }
+
+
 TimeCCSDS                 ::=   OCTET STRING (SIZE(8))
 -- P-field is implicit (not present, defaulted to 41 hex
 -- T-field:
@@ -825,6 +829,7 @@ FrameOrNotification             ::= CHOICE
 {   annotatedFrame                       [0] RafTransferDataInvocation
 ,   syncNotification                     [1] RafSyncNotifyInvocation
 }
+
 RafGetParameterReturn           ::= SEQUENCE
 {   performerCredentials                 Credentials
 ,   invokeId                             InvokeId

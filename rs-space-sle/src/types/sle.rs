@@ -71,12 +71,43 @@ pub fn to_ccsds_time(time: &rs_space_core::time::Time) -> Result<TimeCCSDS, Stri
     Ok(Bytes::copy_from_slice(&tmp))
 }
 
+pub fn from_ccsds_time(t: &TimeCCSDS) -> Result<rs_space_core::time::Time, String> {
+    rs_space_core::time::Time::decode_from_enc(rs_space_core::time::TimeEncoding::CDS8, &t)
+        .map_err(|x| format!("{x}"))
+}
+
 pub fn to_ccsds_time_pico(time: &rs_space_core::time::Time) -> Result<TimeCCSDSpico, String> {
     let mut tmp = [0; 10];
-    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS8), &mut tmp)
+    time.encode_into(Some(rs_space_core::time::TimeEncoding::CDS10), &mut tmp)
         .map_err(|x| format!("{x}"))?;
     Ok(Bytes::copy_from_slice(&tmp))
 }
+
+pub fn from_ccsds_time_pico(t: &TimeCCSDSpico) -> Result<rs_space_core::time::Time, String> {
+    rs_space_core::time::Time::decode_from_enc(rs_space_core::time::TimeEncoding::CDS10, &t)
+        .map_err(|x| format!("{x}"))
+}
+
+pub fn convert_ccsds_time(t: &Time) -> Result<rs_space_core::time::Time, String> {
+    match t {
+        Time::CcsdsFormat(t) => {
+            if t.len() != 8 { 
+                return Err(format!("Error converting CCSDS Time: illegal length {}", t.len()));
+            }
+            from_ccsds_time(t)
+        }
+        Time::CcsdsPicoFormat(t) => {
+            if t.len() != 10 { 
+                return Err(format!("Error converting CCSDS Pico Time: illegal length {}", t.len()));
+            }
+            from_ccsds_time_pico(t)
+        }
+   
+    }
+    
+}
+
+
 
 // ASN1 common types
 #[derive(Debug, Clone, PartialEq, AsnType)]

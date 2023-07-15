@@ -7,7 +7,7 @@ use crate::types::sle::{
     ConditionalTime, Credentials, Diagnostics, PeerAbortDiagnostic, ServiceInstanceIdentifier,
 };
 
-use crate::raf::asn1::RafStartReturnResult;
+use crate::raf::asn1::{ RafStartReturnResult, RafTransferBuffer };
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -134,6 +134,8 @@ pub enum SlePdu {
         invoke_id: InvokeId,
         result: SleResult,
     },
+    #[rasn(tag(context, 8))]
+    SleRafTransferBuffer(RafTransferBuffer),
 }
 
 impl SlePdu {
@@ -169,6 +171,7 @@ impl SlePdu {
                 ..
             } => Some(&invoker_credentials),
             SlePdu::SleAcknowledgement { credentials, .. } => Some(&credentials),
+            SlePdu::SleRafTransferBuffer {..} => None,
         }
     }
 
@@ -183,6 +186,7 @@ impl SlePdu {
             SlePdu::SleRafStartReturn { .. } => "RAF START RETURN",
             SlePdu::SleRafStopInvocation { .. } => "RAF STOP",
             SlePdu::SleAcknowledgement { .. } => "RAF STOP RETURN",
+            SlePdu::SleRafTransferBuffer {.. } => "RAF TRANSFER BUFFER",
         }
     }
 }
