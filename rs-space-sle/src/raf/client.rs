@@ -243,14 +243,11 @@ impl RAFClient {
 
     /// Bind the service given in the config to the end point, establish a connection and execute
     /// the SLE BIND operation
-    #[named]
     pub async fn bind(
         &mut self,
         common_config: &CommonConfig,
         config: &RAFConfig,
     ) -> Result<(), String> {
-        debug!(function_name!());
-
         // first check if we are in a correct state
         let state;
         {
@@ -297,6 +294,12 @@ impl RAFClient {
 
         Ok(())
     }
+
+    pub fn bind_new(&mut self, common_config: &CommonConfig, config: &RAFConfig) 
+        -> impl Future<Output = Result<(), String>> {
+    }
+
+
 
     #[named]
     pub async fn unbind(

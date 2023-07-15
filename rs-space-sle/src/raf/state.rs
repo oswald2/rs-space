@@ -14,6 +14,30 @@ pub enum RAFState {
 
 pub type FrameCallback = fn(&SleTMFrame);
 
+
+// Example code from ChatGPT for Async function pointers:
+
+// use std::pin::Pin;
+// use std::future::Future;
+// use std::boxed::Box;
+
+// type AsyncFn<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+// type AsyncFnPointer<T> = Box<dyn Fn() -> AsyncFn<T> + Send>;
+
+// async fn example() -> i32 {
+//     42
+// }
+
+// fn main() {
+//     let func: AsyncFnPointer<i32> = Box::new(|| Box::pin(example()));
+//     let fut = func();
+// }
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct InternalRAFState {
     state: RAFState,
