@@ -1,12 +1,19 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use rs_space_sle::raf::asn1::RequestedFrameQuality;
+use rs_space_sle::raf::asn1::{RequestedFrameQuality, SleTMFrame};
 use rs_space_sle::user::config::UserConfig;
 use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
 
 use log::{error, info};
+
+
+fn frame_callback(frame: &SleTMFrame) {
+    info!("Got Frame: {:?}", frame);
+}
+
+
 
 pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
     for raf_config in &config.rafs {
@@ -16,7 +23,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = RAFClient::sle_connect_raf(&config.common, &raf_config).await?;
+        let mut raf = RAFClient::sle_connect_raf(&config.common, &raf_config, frame_callback).await?;
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 

@@ -15,9 +15,9 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::asn1::*;
-use crate::raf::asn1::RequestedFrameQuality;
+use crate::raf::asn1::{ RequestedFrameQuality, FrameOrNotification, RafTransferBuffer, convert_frame};
 use crate::raf::config::RAFConfig;
-use crate::raf::state::{InternalRAFState, RAFState};
+use crate::raf::state::{InternalRAFState, RAFState, FrameCallback};
 use crate::sle::config::{CommonConfig, SleAuthType};
 // use crate::pdu::PDU;
 use crate::tml::config::TMLConfig;
@@ -70,6 +70,7 @@ impl RAFClient {
     pub async fn sle_connect_raf(
         config: &CommonConfig,
         raf_config: &RAFConfig,
+        frame_callback: FrameCallback
     ) -> Result<RAFClient, Error> {
         let sock = TcpStream::connect((raf_config.hostname.as_ref(), raf_config.port)).await?;
 
@@ -90,7 +91,7 @@ impl RAFClient {
         let sii = raf_config.sii.clone();
         let sii2 = raf_config.sii.clone();
 
-        let raf_state = Arc::new(Mutex::new(InternalRAFState::new()));
+        let raf_state = Arc::new(Mutex::new(InternalRAFState::new(frame_callback)));
         let raf_state2 = raf_state.clone();
         let raf_state3 = raf_state.clone();
 
@@ -458,6 +459,7 @@ impl RAFClient {
     pub async fn cancel(&self) {
         self.cancellation_token.cancel();
     }
+
 }
 
 fn cancel_timer(op_type: HandleType, handle_vec: HandleVec) {
@@ -554,7 +556,9 @@ fn process_sle_pdu(pdu: &SlePdu, state: InternalState, handle_vec: HandleVec) {
             let mut lock = state.lock().expect("Mutex lock failed");
             lock.process_stop(result);
         }
-
+        SlePdu::SleRafTransferBuffer(buffer) => {
+            process_transfer_frame_buffer(state, buffer);
+        }
         pdu => {
             debug!("Received: {:?}", pdu);
         }
@@ -616,27 +620,62 @@ fn check_authentication(
 fn check_all(config: &CommonConfig, state: InternalState, pdu: &SlePdu) -> bool {
     let credentials = pdu.get_credentials();
 
-    match credentials {
-        Some(creds) => match creds {
-            Credentials::Unused => {
-                error!("Authentication failed, no credentials provided");
+    if let SlePdu::SleRafTransferBuffer(buffer) = pdu {
+        for frame in buffer {
+            let res = check_buffer_credential(config, state.clone(), frame);
+            if !res {
                 return false;
             }
-            Credentials::Used(isp1) => {
-                let name;
-                {
-                    let lock = state.lock().expect("Mutex lock failed");
-                    name = lock.provider().clone();
+        }
+        return true;
+    }
+    else {
+        match credentials {
+            Some(creds) => match creds {
+                Credentials::Unused => {
+                    error!("Authentication failed, no credentials provided");
+                    return false;
                 }
-                let op_name = pdu.operation_name();
-                return check_peer(config, isp1, &name, op_name);
+                Credentials::Used(isp1) => {
+                    let name;
+                    {
+                        let lock = state.lock().expect("Mutex lock failed");
+                        name = lock.provider().clone();
+                    }
+                    let op_name = pdu.operation_name();
+                    return check_peer(config, isp1, &name, op_name);
+                }
+            },
+            None => {
+                return true;
             }
-        },
-        None => {
-            return true;
         }
     }
 }
+
+fn check_buffer_credential(config: &CommonConfig, state: InternalState, buf_part: &FrameOrNotification) -> bool {
+    let creds = match buf_part {
+        FrameOrNotification::AnnotatedFrame(trans) => &trans.invoker_credentials,
+        FrameOrNotification::SyncNotification(notif) => &notif.invoker_credentials,
+    };
+
+    match creds {
+        Credentials::Unused => {
+            error!("Authentication of TM frame failed, no credentials provided");
+            return false;
+        }
+        Credentials::Used(isp1) => {
+            let name;
+            {
+                let lock = state.lock().expect("Mutex lock failed");
+                name = lock.provider().clone();
+            }
+            let op_name = "RAF TRANSFER BUFFER";
+            return check_peer(config, &isp1, &name, op_name);
+        }
+    }
+}
+
 
 fn check_peer(
     config: &CommonConfig,
@@ -658,6 +697,30 @@ fn check_peer(
                 identifier.value.as_str()
             );
             return false;
+        }
+    }
+}
+
+
+fn process_transfer_frame_buffer(state: InternalState, buffer: &RafTransferBuffer) {
+    let lock = state.lock().expect("Mutex lock failed");
+    
+    for elem in buffer {
+        match elem {
+            FrameOrNotification::AnnotatedFrame(frame) => {
+                match convert_frame(frame) {
+                    Ok(frame) => { 
+                        lock.process_tm_frame(&frame);
+                    }
+                    Err(err) => {
+                        error!("Error decoding TM frame: {}", err);
+                    }
+                }
+                
+            }
+            FrameOrNotification::SyncNotification(notif) => {
+                debug!("Got SYNC Notification: {:?}", notif);
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 use log::{error, info};
 
 use crate::asn1::{BindResult, SleResult};
-use crate::raf::asn1::RafStartReturnResult;
+use crate::raf::asn1::{RafStartReturnResult, SleTMFrame};
 use rasn::types::{Utf8String, VisibleString};
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -12,17 +12,21 @@ pub enum RAFState {
     Active,
 }
 
+pub type FrameCallback = fn(&SleTMFrame);
+
 #[derive(Debug, Clone)]
 pub struct InternalRAFState {
     state: RAFState,
     provider: VisibleString,
+    frame_callback: FrameCallback,
 }
 
 impl InternalRAFState {
-    pub fn new() -> Self {
+    pub fn new(frame_callback: FrameCallback) -> Self {
         InternalRAFState {
             state: RAFState::Unbound,
             provider: VisibleString::new(Utf8String::from("")),
+            frame_callback: frame_callback,
         }
     }
 
@@ -77,5 +81,9 @@ impl InternalRAFState {
 
     pub fn get_state(&self) -> RAFState {
         self.state
+    }
+
+    pub fn process_tm_frame(&self, res: &SleTMFrame) {
+        (self.frame_callback)(res);
     }
 }
