@@ -43,8 +43,10 @@ pub enum SleMsg {
 
 pub enum OpRet {
     BindRet(BindResult),
+    UnbindRet,
     RafStartRet(RafStartReturnResult),
-    RafStopRet(SleResult),
+    AckRet(SleResult),
+    PeerAbort,
 }
 
 type InternalTask = Option<JoinHandle<()>>;
@@ -173,6 +175,7 @@ impl RAFClient {
         let sender2 = sender.clone();
 
         let (op_ret_sender, op_ret_receiver) = channel::<OpRet>(QUEUE_SIZE);
+        let op_ret_sender2 = op_ret_sender.clone();
 
         let cancel1 = self.cancellation_token.clone();
         let cancel2 = self.cancellation_token.clone();
@@ -243,6 +246,9 @@ impl RAFClient {
                                     }
                                     Some(SleMsg::PDU(pdu)) => {
                                         debug!("Received command: {:?}", pdu);
+
+                                        let is_peer_abort = pdu.is_peer_abort();
+
                                         match process_sle_msg(pdu, raf_state3.clone()) {
                                             Err(err) => {
                                                 error!("Error encoding SLE message: {}", err);
@@ -253,6 +259,11 @@ impl RAFClient {
                                                 if let Err(err) = tml_message.write_to_async(&mut tx).await {
                                                     error!("Error sending SLE message to socket: {}", err);
                                                     break;
+                                                }
+
+                                                // check, if we just sent a peer abort and if so, notify the client
+                                                if is_peer_abort {
+                                                    let _ = op_ret_sender2.send(OpRet::PeerAbort).await;
                                                 }
                                             }
                                         }
@@ -331,6 +342,50 @@ impl RAFClient {
                 debug!("RAF client for {} has been cancelled (BIND operation)", self.raf_config.sii);
             }
         }
+        Ok(())
+    }
+
+    pub async fn unbind(&mut self, reason: UnbindReason) -> Result<(), String> {
+        // first check if we are in a correct state
+        let state;
+        {
+            let st = self
+                .state
+                .lock()
+                .expect("Error locking RAF internal state mutex");
+            state = st.get_state();
+        }
+        if state == RAFState::Unbound {
+            // Unbind is always accepted, though in UNBOUND state, we don't need
+            // to send
+            return Ok(());
+        }
+
+        // generate the credentials
+        let credentials = self.new_credentials();
+
+        let pdu = SlePdu::SleUnbindInvocation {
+            invoker_credentials: credentials,
+            unbind_reason: (reason as i32).into(),
+        };
+
+        self.send_pdu(pdu).await?;
+
+        self.cancellation_token.cancel();
+
+        // Take the tasks and wait for their termination
+        if let Some(read_handle) = self.read_task.take() {
+            let _ = read_handle.await;
+        }
+        if let Some(write_handle) = self.write_task.take() {
+            let _ = write_handle.await;
+        }
+
+        // reset the client
+        self.chan = None;
+        self.ret_chan = None;
+        self.invoke_id.store(0, Ordering::Relaxed);
+
         Ok(())
     }
 
@@ -437,20 +492,25 @@ impl RAFClient {
                 }
             }
             _ = tokio::time::sleep(self.op_timeout) => {
-                return Err(format!("Error: timeout waiting for RAF START RETURN"));
+                return Err(format!("Error: timeout waiting for RAF STOP RETURN"));
             }
             _ = self.cancellation_token.cancelled() => {
-                debug!("RAF client for {} has been cancelled (RAF START operation)", self.raf_config.sii);
+                debug!("RAF client for {} has been cancelled (RAF STOP operation)", self.raf_config.sii);
             }
         }
 
         Ok(())
     }
 
+    pub async fn peer_abort(&mut self, diagnostic: PeerAbortDiagnostic) {
+        warn!("Sending PeerAbort");
+        // Create the RAF START SLE PDU
+        let pdu = SlePdu::SlePeerAbort { diagnostic };
 
+        // And finally, send the PDU
+        let _ = self.send_pdu(pdu).await;
+    }
 
-
-    
     pub async fn stop_processing(&mut self) {
         match &self.chan {
             Some(chan) => {
@@ -530,35 +590,43 @@ async fn process_sle_pdu(pdu: &SlePdu, state: InternalState, op_ret_sender: &Sen
             responder_credentials: _,
             result: _,
         } => {
-            // We have a valid return, so cancel the timer waiting for the return
-            //cancel_timer(HandleType::Unbind, handle_vec);
+            {
+                // Lock our state and process the UNBIND RETURN
+                let mut lock = state.lock().expect("Mutex lock failed");
+                lock.process_unbind();
+            }
 
-            // Lock our state and process the UNBIND RETURN
-            let mut lock = state.lock().expect("Mutex lock failed");
-            lock.process_unbind();
+            let _ = op_ret_sender.send(OpRet::UnbindRet).await;
         }
         SlePdu::SleRafStartReturn {
             performer_credentials: _,
             invoke_id: _,
             result,
         } => {
-            //cancel_timer(HandleType::Start, handle_vec);
+            {
+                let mut lock = state.lock().expect("Mutex lock failed");
+                lock.process_start(result);
+            }
 
-            let mut lock = state.lock().expect("Mutex lock failed");
-            lock.process_start(result);
+            let _ = op_ret_sender.send(OpRet::RafStartRet(result.clone())).await;
         }
         SlePdu::SleAcknowledgement {
             credentials: _,
             invoke_id: _,
             result,
         } => {
-            //cancel_timer(HandleType::Stop, handle_vec);
-
-            let mut lock = state.lock().expect("Mutex lock failed");
-            lock.process_stop(result);
+            {
+                let mut lock = state.lock().expect("Mutex lock failed");
+                lock.process_stop(result);
+            }
+            let _ = op_ret_sender.send(OpRet::AckRet(result.clone())).await;
         }
         SlePdu::SleRafTransferBuffer(buffer) => {
             process_transfer_frame_buffer(state, buffer);
+        }
+        SlePdu::SlePeerAbort { diagnostic } => {
+            let mut lock = state.lock().expect("Mutex lock failed");
+            lock.process_peer_abort(diagnostic);
         }
         pdu => {
             debug!("Received: {:?}", pdu);
@@ -766,7 +834,7 @@ async fn check_raf_stop_return(chan: &mut Receiver<OpRet>) -> Result<SleResult, 
                     "Error: internal operation return channel has been closed"
                 ));
             }
-            Some(OpRet::RafStopRet(res)) => {
+            Some(OpRet::AckRet(res)) => {
                 return Ok(res);
             }
             Some(_) => {}

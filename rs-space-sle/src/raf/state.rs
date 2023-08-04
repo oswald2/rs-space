@@ -1,7 +1,8 @@
-use log::{error, info};
+use log::{error, info, warn};
 
 use crate::asn1::{BindResult, SleResult};
 use crate::raf::asn1::{RafStartReturnResult, SleTMFrame};
+use crate::types::sle::PeerAbortDiagnostic;
 use rasn::types::{Utf8String, VisibleString};
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,6 +55,11 @@ impl InternalRAFState {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.state = RAFState::Unbound;
+        self.provider = VisibleString::new(Utf8String::from(""));
+    }
+
     pub fn provider(&self) -> &VisibleString {
         &self.provider
     }
@@ -102,6 +108,11 @@ impl InternalRAFState {
             }
         }
     }
+
+    pub fn process_peer_abort(&mut self, res: &PeerAbortDiagnostic) {
+        warn!("Received PEER ABORT with diagnostic: {:?}", res);
+        self.reset();
+    }   
 
     pub fn get_state(&self) -> RAFState {
         self.state

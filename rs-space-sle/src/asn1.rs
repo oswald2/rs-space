@@ -7,7 +7,7 @@ use crate::types::sle::{
     ConditionalTime, Credentials, Diagnostics, PeerAbortDiagnostic, ServiceInstanceIdentifier,
 };
 
-use crate::raf::asn1::{ RafStartReturnResult, RafTransferBuffer };
+use crate::raf::asn1::{RafStartReturnResult, RafTransferBuffer};
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -171,7 +171,7 @@ impl SlePdu {
                 ..
             } => Some(&invoker_credentials),
             SlePdu::SleAcknowledgement { credentials, .. } => Some(&credentials),
-            SlePdu::SleRafTransferBuffer {..} => None,
+            SlePdu::SleRafTransferBuffer { .. } => None,
         }
     }
 
@@ -186,7 +186,14 @@ impl SlePdu {
             SlePdu::SleRafStartReturn { .. } => "RAF START RETURN",
             SlePdu::SleRafStopInvocation { .. } => "RAF STOP",
             SlePdu::SleAcknowledgement { .. } => "RAF STOP RETURN",
-            SlePdu::SleRafTransferBuffer {.. } => "RAF TRANSFER BUFFER",
+            SlePdu::SleRafTransferBuffer { .. } => "RAF TRANSFER BUFFER",
+        }
+    }
+
+    pub fn is_peer_abort(&self) -> bool {
+        match self {
+            SlePdu::SlePeerAbort { .. } => true,
+            _ => false,
         }
     }
 }

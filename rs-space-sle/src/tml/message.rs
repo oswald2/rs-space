@@ -1,10 +1,6 @@
 #[allow(unused)]
 use byteorder::{BigEndian, WriteBytesExt};
-use function_name::named;
-use log::debug;
-
 use std::io::{Cursor, Write, IoSlice};
-
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
 
 
@@ -141,10 +137,7 @@ impl TMLMessage {
         }
     }
 
-    #[named]
     pub async fn write_to_async<T: AsyncWriteExt + Unpin>(&self, writer: &mut T) -> Result<(), Error> {
-        debug!(function_name!());
-
         let mut buf = [0; 8];
 
         buf[0] = self.msg_type as u8;
