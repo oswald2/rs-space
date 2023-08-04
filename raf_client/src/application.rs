@@ -21,7 +21,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = RAFClient::new(&config.common, &raf_config, frame_callback).await?;
+        let mut raf = RAFClient::new(&config.common, &raf_config, frame_callback);
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 

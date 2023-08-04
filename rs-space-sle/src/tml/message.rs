@@ -1,8 +1,8 @@
+use byteorder::ReadBytesExt;
 #[allow(unused)]
 use byteorder::{BigEndian, WriteBytesExt};
-use std::io::{Cursor, Write, IoSlice};
+use std::io::{Cursor, IoSlice, Read, Write};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind};
-
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,13 +20,10 @@ impl TryFrom<u8> for TMLMessageType {
             1 => Ok(TMLMessageType::SlePduMessage),
             2 => Ok(TMLMessageType::ContextMessage),
             3 => Ok(TMLMessageType::HeartBeat),
-            _ => Err(()) 
+            _ => Err(()),
         }
     }
-
-
 }
-
 
 #[derive(Debug)]
 pub struct TMLMessage {
@@ -48,7 +45,7 @@ impl TMLMessage {
         TMLMessage {
             msg_type: TMLMessageType::SlePduMessage,
             length: 0,
-            data: data
+            data: data,
         }
     }
 
@@ -89,28 +86,61 @@ impl TMLMessage {
         }
     }
 
-    pub async fn read_from_async<T: AsyncReadExt + Unpin>(&mut self, reader: &mut T) -> Result<(), Error> {
+    pub fn check_context(&self) -> Result<(u16, u16), String> {
+        match self.msg_type {
+            TMLMessageType::ContextMessage => {
+                let mut rdr = Cursor::new(&self.data);
+                let mut buf = [0; 8];
+                if let Err(err) = Read::read_exact(&mut rdr, &mut buf[..]) {
+                    return Err(format!("Error parsing TML Context Message: {}", err));
+                }
+
+                // Check for the ISP1 Value
+                let comp = b"ISP1\0\0\01";
+                if comp != &buf {
+                    return Err(
+                        "Error parsing TML Context Message: ISP1 value not found or wrong version"
+                            .to_string(),
+                    );
+                }
+
+                let interval = ReadBytesExt::read_u16::<BigEndian>(&mut rdr).map_err(|_| {
+                    format!("Error parsing TML Context Message: could not read interval value")
+                })?;
+                let dead_factor = ReadBytesExt::read_u16::<BigEndian>(&mut rdr).map_err(|_| {
+                    format!("Error parsing TML Context Message: could not read dead factor value")
+                })?;
+
+                Ok((interval, dead_factor))
+            }
+            x => Err(format!("Expected TML Context Message, got {:?}", x)),
+        }
+    }
+
+    pub async fn read_from_async<T: AsyncReadExt + Unpin>(
+        &mut self,
+        reader: &mut T,
+    ) -> Result<(), Error> {
         let t = reader.read_u8().await?;
 
         if let Ok(t1) = TMLMessageType::try_from(t) {
-            // assign the message type 
+            // assign the message type
             self.msg_type = t1;
 
             // skip the next 3 bytes
-            let mut dummy = [0,0,0];
+            let mut dummy = [0, 0, 0];
             reader.read(&mut dummy[..]).await?;
 
             // read in the length
             self.length = reader.read_u32().await?;
-    
-            // now read in the data 
+
+            // now read in the data
             self.data.resize(self.length as usize, 0);
             reader.read_exact(&mut self.data[0..]).await?;
             Ok(())
-        }    
-        else  {
+        } else {
             let msg = format!("TML Message: invalid message type {}", t);
-            return Err(Error::new(ErrorKind::InvalidInput, msg))
+            return Err(Error::new(ErrorKind::InvalidInput, msg));
         }
     }
 
@@ -121,23 +151,25 @@ impl TMLMessage {
         if let Ok(t1) = TMLMessageType::try_from(buf[0]) {
             // read in the length
             let length = reader.read_u32().await?;
-    
-            // now read in the data 
+
+            // now read in the data
             let mut data = vec![0; length as usize];
             reader.read_exact(&mut data[..]).await?;
-            Ok(TMLMessage{
+            Ok(TMLMessage {
                 msg_type: t1,
                 length: length,
-                data: data 
+                data: data,
             })
-        }    
-        else  {
+        } else {
             let msg = format!("TML Message: invalid message type {}", buf[0]);
-            return Err(Error::new(ErrorKind::InvalidInput, msg))
+            return Err(Error::new(ErrorKind::InvalidInput, msg));
         }
     }
 
-    pub async fn write_to_async<T: AsyncWriteExt + Unpin>(&self, writer: &mut T) -> Result<(), Error> {
+    pub async fn write_to_async<T: AsyncWriteExt + Unpin>(
+        &self,
+        writer: &mut T,
+    ) -> Result<(), Error> {
         let mut buf = [0; 8];
 
         buf[0] = self.msg_type as u8;
@@ -146,9 +178,10 @@ impl TMLMessage {
         let len: u32 = self.data.len() as u32;
         WriteBytesExt::write_u32::<BigEndian>(&mut cursor, len).unwrap();
 
-        writer.write_vectored(&[IoSlice::new(&buf), IoSlice::new(&self.data)]).await?;
+        writer
+            .write_vectored(&[IoSlice::new(&buf), IoSlice::new(&self.data)])
+            .await?;
         writer.flush().await?;
         Ok(())
     }
-
 }

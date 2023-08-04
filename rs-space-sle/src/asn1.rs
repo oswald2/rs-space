@@ -1,6 +1,7 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
+use num_traits::ToPrimitive;
 use rasn::{types::*, AsnType, Decode, Encode};
 
 use crate::types::sle::{
@@ -44,6 +45,34 @@ pub enum ApplicationIdentifier {
     FwdTcVca = 14,
     FwdTcFrame = 15,
     FwdCltu = 16,
+}
+
+impl TryFrom<&rasn::types::Integer> for ApplicationIdentifier {
+    type Error = String;
+
+    fn try_from(value: &Integer) -> Result<Self, Self::Error> {
+        match value.to_i64() {
+            Some(0) => Ok(ApplicationIdentifier::RtnAllFrames),
+            Some(1) => Ok(ApplicationIdentifier::RtnInsert),
+            Some(2) => Ok(ApplicationIdentifier::RtnChFrames),
+            Some(3) => Ok(ApplicationIdentifier::RtnChFsh),
+            Some(4) => Ok(ApplicationIdentifier::RtnChOcf),
+            Some(5) => Ok(ApplicationIdentifier::RtnBitstr),
+            Some(6) => Ok(ApplicationIdentifier::RtnSpacePkt),
+            Some(7) => Ok(ApplicationIdentifier::FwdAosSpacePkt),
+            Some(8) => Ok(ApplicationIdentifier::FwdAosVca),
+            Some(9) => Ok(ApplicationIdentifier::FwdBitstr),
+            Some(10) => Ok(ApplicationIdentifier::FwdProtoVcdu),
+            Some(11) => Ok(ApplicationIdentifier::FwdInsert),
+            Some(12) => Ok(ApplicationIdentifier::FwdCVcdu),
+            Some(13) => Ok(ApplicationIdentifier::FwdTcSpacePkt),
+            Some(14) => Ok(ApplicationIdentifier::FwdTcVca),
+            Some(15) => Ok(ApplicationIdentifier::FwdTcFrame),
+            Some(16) => Ok(ApplicationIdentifier::FwdCltu),
+            Some(x) => Err(format!("Illegal value {} for ApplicationIdentifier", x)),
+            None => Err("Illegal value for ApplicationIdentifier".to_string()),
+        }
+    }
 }
 
 pub type AuthorityIdentifier = VisibleString;

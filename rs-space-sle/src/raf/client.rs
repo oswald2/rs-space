@@ -7,7 +7,6 @@ use rand::rngs::ThreadRng;
 use rand::{thread_rng, RngCore};
 use rasn::types::{Utf8String, VisibleString};
 use rs_space_core::time::{Time, TimeEncoding};
-use tokio::io::Error;
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -71,11 +70,11 @@ type InternalState = Arc<Mutex<InternalRAFState>>;
 impl RAFClient {
     /// Create a new instance of a RAF client, with the given configurations and the given callback for
     /// TM Transfer Frames
-    pub async fn new(
+    pub fn new(
         common_config: &CommonConfig,
         raf_config: &RAFConfig,
         frame_callback: FrameCallback,
-    ) -> Result<RAFClient, Error> {
+    ) -> RAFClient {
         let cancellation = CancellationToken::new();
         let raf_state = Arc::new(Mutex::new(InternalRAFState::new(frame_callback)));
 
@@ -93,7 +92,7 @@ impl RAFClient {
             invoke_id: AtomicU16::new(0),
         };
 
-        Ok(client)
+        client
     }
 
     /// Send a SleMsg as a command to control the machinery
@@ -180,7 +179,6 @@ impl RAFClient {
         let raf_state3 = self.state.clone();
 
         let common_config2 = self.common_config.clone();
-        let raf_config2 = self.raf_config.clone();
 
         let read_task = tokio::spawn(async move {
             loop {
@@ -197,7 +195,7 @@ impl RAFClient {
                                 }
                                 else
                                 {
-                                    parse_sle_message(&common_config2, &raf_config2, &msg, raf_state2.clone(), cancel1.clone(), &op_ret_sender).await;
+                                    parse_sle_message(&common_config2, &msg, raf_state2.clone(), cancel1.clone(), &op_ret_sender).await;
                                 }
                             }
                         }
@@ -378,7 +376,7 @@ impl RAFClient {
         Ok(())
     }
 
-    /// Start this service instance. The start- and stop time are provided 
+    /// Start this service instance. The start- and stop time are provided
     /// together with the requested frame quality
     pub async fn start(
         &mut self,
@@ -528,7 +526,7 @@ impl RAFClient {
         }
     }
 
-    /// Cancel the internal tasks. 
+    /// Cancel the internal tasks.
     pub async fn cancel(&self) {
         self.cancellation_token.cancel();
     }
@@ -543,7 +541,6 @@ fn process_sle_msg(pdu: SlePdu, _state: InternalState) -> Result<TMLMessage, Str
 
 async fn parse_sle_message(
     config: &CommonConfig,
-    raf_cfg: &RAFConfig,
     msg: &TMLMessage,
     state: InternalState,
     cancel_token: CancellationToken,
@@ -560,7 +557,7 @@ async fn parse_sle_message(
         }
         Ok(pdu) => {
             // check authentication
-            if !check_authentication(config, raf_cfg, state.clone(), &pdu) {
+            if !check_authentication(config, state.clone(), &pdu) {
                 error!("SLE PDU failed authentication");
                 cancel_token.cancel();
             }
@@ -636,12 +633,7 @@ async fn process_sle_pdu(pdu: &SlePdu, state: InternalState, op_ret_sender: &Sen
     }
 }
 
-fn check_authentication(
-    config: &CommonConfig,
-    _raf_cfg: &RAFConfig,
-    state: InternalState,
-    pdu: &SlePdu,
-) -> bool {
+fn check_authentication(config: &CommonConfig, state: InternalState, pdu: &SlePdu) -> bool {
     match config.auth_type {
         SleAuthType::AuthNone =>
         // in case we have not authentication configured, all is good
@@ -691,16 +683,44 @@ fn check_authentication(
 fn check_all(config: &CommonConfig, state: InternalState, pdu: &SlePdu) -> bool {
     let credentials = pdu.get_credentials();
 
-    if let SlePdu::SleRafTransferBuffer(buffer) = pdu {
-        for frame in buffer {
-            let res = check_buffer_credential(config, state.clone(), frame);
-            if !res {
+    match pdu {
+        // We need to handle RAF Buffer transfer special
+        SlePdu::SleRafTransferBuffer(buffer) => {
+            for frame in buffer {
+                let res = check_buffer_credential(config, state.clone(), frame);
+                if !res {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // So do the bind invocations
+        SlePdu::SleBindInvocation {
+            invoker_credentials,
+            initiator_identifier,
+            ..
+        } => match invoker_credentials {
+            Credentials::Unused => {
+                error!("BIND Authentication failed: AUTH_BIND requested, but BIND invocation does not contain credentials");
                 return false;
             }
-        }
-        return true;
-    } else {
-        match credentials {
+            Credentials::Used(creds) => check_peer(config, creds, initiator_identifier, "BIND"),
+        },
+        SlePdu::SleBindReturn {
+            performer_credentials,
+            responder_identifier,
+            ..
+        } => match performer_credentials {
+            Credentials::Unused => {
+                error!("BIND Authentication failed: AUTH_BIND requested, but BIND RETURN does not contain credentials");
+                return false;
+            }
+            Credentials::Used(isp1) => {
+                check_peer(config, isp1, responder_identifier, "BIND RETURN")
+            }
+        },
+        // All other PDUs, we can handle the same
+        _ => match credentials {
             Some(creds) => match creds {
                 Credentials::Unused => {
                     error!("Authentication failed, no credentials provided");
@@ -719,7 +739,7 @@ fn check_all(config: &CommonConfig, state: InternalState, pdu: &SlePdu) -> bool 
             None => {
                 return true;
             }
-        }
+        },
     }
 }
 
