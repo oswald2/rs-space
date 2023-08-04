@@ -509,6 +509,14 @@ impl RAFClient {
 
         // And finally, send the PDU
         let _ = self.send_pdu(pdu).await;
+
+        // Now we wait for the operation return. In case of Peer Abort, we just 
+        // wait until it is sent, then we return
+        let chan: &mut Receiver<OpRet> = self.ret_chan.as_mut().unwrap();
+        let _ = check_peer_abort(chan).await;
+
+        // Ok, we have sent the Peer Abort out, now we can terminate our own tasks
+        self.cancel().await;
     }
 
     pub async fn stop_processing(&mut self) {
@@ -836,6 +844,22 @@ async fn check_raf_stop_return(chan: &mut Receiver<OpRet>) -> Result<SleResult, 
             }
             Some(OpRet::AckRet(res)) => {
                 return Ok(res);
+            }
+            Some(_) => {}
+        }
+    }
+}
+
+async fn check_peer_abort(chan: &mut Receiver<OpRet>) -> Result<(), String> {
+    loop {
+        match chan.recv().await {
+            None => {
+                return Err(format!(
+                    "Error: internal operation return channel has been closed"
+                ));
+            }
+            Some(OpRet::PeerAbort) => {
+                return Ok(());
             }
             Some(_) => {}
         }

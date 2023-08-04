@@ -1,6 +1,7 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
+use rs_space_sle::asn1::UnbindReason;
 use rs_space_sle::raf::asn1::{RequestedFrameQuality, SleTMFrame};
 use rs_space_sle::raf::client::RAFClient;
 use rs_space_sle::user::config::UserConfig;
@@ -53,13 +54,13 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         }
 
         info!("Sending SLE UNBIND...");
-        // match raf.unbind(&config.common, UnbindReason::End).await {
-        //     Ok(_) => {}
-        //     Err(err) => {
-        //         error!("UNBIND returned error: {err}");
-        //         return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
-        //     }
-        // }
+        match raf.unbind(UnbindReason::End).await {
+            Ok(_) => {}
+            Err(err) => {
+                error!("UNBIND returned error: {err}");
+                return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
+            }
+        }
 
         raf.stop_processing().await;
     }
