@@ -30,8 +30,6 @@ use crate::types::sle::{
 };
 use log::{debug, error, info, warn};
 
-use function_name::named;
-
 use super::asn1::RafStartReturnResult;
 
 const QUEUE_SIZE: usize = 500;
@@ -51,16 +49,7 @@ pub enum OpRet {
 
 type InternalTask = Option<JoinHandle<()>>;
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-// enum HandleType {
-//     Bind,
-//     Unbind,
-//     Start,
-//     Stop,
-// }
-
-// type HandleVec = Arc<Mutex<Vec<(HandleType, JoinHandle<()>)>>>;
-
+/// The RAF client itself.
 pub struct RAFClient {
     common_config: CommonConfig,
     raf_config: RAFConfig,
@@ -80,7 +69,8 @@ pub struct RAFClient {
 type InternalState = Arc<Mutex<InternalRAFState>>;
 
 impl RAFClient {
-    /// Connect to the SLE RAF instance given in the RAFConfig.
+    /// Create a new instance of a RAF client, with the given configurations and the given callback for
+    /// TM Transfer Frames
     pub async fn new(
         common_config: &CommonConfig,
         raf_config: &RAFConfig,
@@ -120,9 +110,7 @@ impl RAFClient {
     }
 
     /// Send a PDU to the connected instance
-    #[named]
     pub async fn send_pdu(&mut self, pdu: SlePdu) -> Result<(), String> {
-        debug!(function_name!());
         self.command(SleMsg::PDU(pdu)).await
     }
 
@@ -345,6 +333,7 @@ impl RAFClient {
         Ok(())
     }
 
+    /// Unbind the client again from the endpoint
     pub async fn unbind(&mut self, reason: UnbindReason) -> Result<(), String> {
         // first check if we are in a correct state
         let state;
@@ -389,6 +378,8 @@ impl RAFClient {
         Ok(())
     }
 
+    /// Start this service instance. The start- and stop time are provided 
+    /// together with the requested frame quality
     pub async fn start(
         &mut self,
         start: Option<Time>,
@@ -451,6 +442,7 @@ impl RAFClient {
         Ok(())
     }
 
+    /// Stop the service instance again
     pub async fn stop(&mut self) -> Result<(), String> {
         // first check if we are in a correct state
         let state;
@@ -502,6 +494,7 @@ impl RAFClient {
         Ok(())
     }
 
+    /// Send a SLE PEER ABORT, then terminate all internal tasks
     pub async fn peer_abort(&mut self, diagnostic: PeerAbortDiagnostic) {
         warn!("Sending PeerAbort");
         // Create the RAF START SLE PDU
@@ -510,7 +503,7 @@ impl RAFClient {
         // And finally, send the PDU
         let _ = self.send_pdu(pdu).await;
 
-        // Now we wait for the operation return. In case of Peer Abort, we just 
+        // Now we wait for the operation return. In case of Peer Abort, we just
         // wait until it is sent, then we return
         let chan: &mut Receiver<OpRet> = self.ret_chan.as_mut().unwrap();
         let _ = check_peer_abort(chan).await;
@@ -519,6 +512,7 @@ impl RAFClient {
         self.cancel().await;
     }
 
+    /// Sending the processing tasks a shutdown command
     pub async fn stop_processing(&mut self) {
         match &self.chan {
             Some(chan) => {
@@ -534,7 +528,7 @@ impl RAFClient {
         }
     }
 
-    /// Stop the machinery
+    /// Cancel the internal tasks. 
     pub async fn cancel(&self) {
         self.cancellation_token.cancel();
     }
