@@ -2,18 +2,15 @@
 use std::collections::BTreeSet;
 
 use rs_space_sle::raf::asn1::{RequestedFrameQuality, SleTMFrame};
+use rs_space_sle::raf::client::RAFClient;
 use rs_space_sle::user::config::UserConfig;
-use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
 
 use log::{error, info};
 
-
 fn frame_callback(frame: &SleTMFrame) {
     info!("Got Frame: {:?}", frame);
 }
-
-
 
 pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
     for raf_config in &config.rafs {
@@ -23,12 +20,12 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = RAFClient::sle_connect_raf(&config.common, &raf_config, frame_callback).await?;
+        let mut raf = RAFClient::new(&config.common, &raf_config, frame_callback).await?;
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 
         info!("Sending SLE BIND...");
-        if let Err(err) = raf.bind(&config.common, &config.rafs[0]).await {
+        if let Err(err) = raf.bind().await {
             error!("Bind returned error: {err}");
             return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
         }
@@ -36,7 +33,10 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         info!("Starting SLE RAF service...");
-        if let Err(err) = raf.start(&config.common, &config.rafs[0], None, None, RequestedFrameQuality::AllFrames).await {
+        if let Err(err) = raf
+            .start(None, None, RequestedFrameQuality::AllFrames)
+            .await
+        {
             error!("RAF Start returned error: {err}");
             return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
         }
@@ -47,20 +47,19 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
             .expect("failed to listen to CTRL-C event");
 
         info!("Stopping SLE RAF service...");
-        if let Err(err) = raf.stop(&config.common, &config.rafs[0]).await {
+        if let Err(err) = raf.stop().await {
             error!("RAF Start returned error: {err}");
             return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
         }
 
-
         info!("Sending SLE UNBIND...");
-        match raf.unbind(&config.common, UnbindReason::End).await {
-            Ok(_) => {}
-            Err(err) => {
-                error!("UNBIND returned error: {err}");
-                return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
-            }
-        }
+        // match raf.unbind(&config.common, UnbindReason::End).await {
+        //     Ok(_) => {}
+        //     Err(err) => {
+        //         error!("UNBIND returned error: {err}");
+        //         return Err(Error::new(std::io::ErrorKind::ConnectionRefused, err));
+        //     }
+        // }
 
         raf.stop_processing().await;
     }
