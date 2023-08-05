@@ -169,6 +169,7 @@ impl RAFClient {
 
         let cfg: &TMLConfig = &self.common_config.tml;
         let timeout = cfg.heartbeat;
+        let timeout_dur = Duration::from_secs(timeout as u64);
         let timeout2 = timeout.clone();
         let dead_factor2 = cfg.dead_factor.clone();
         let recv_timeout = cfg.heartbeat * cfg.dead_factor;
@@ -182,7 +183,7 @@ impl RAFClient {
 
         let read_task = tokio::spawn(async move {
             loop {
-                select!(
+                select! {
                     res = TMLMessage::async_read(&mut rx) => {
                         match res {
                             Err(err) => {
@@ -210,7 +211,7 @@ impl RAFClient {
                         debug!("RAF client for {} has been cancelled (read task)", sii);
                         return;
                     }
-                );
+                };
             }
         });
 
@@ -261,7 +262,7 @@ impl RAFClient {
                                 }
                         },
 
-                        _ = tokio::time::sleep(Duration::from_secs(timeout as u64)) => {
+                        _ = tokio::time::sleep(timeout_dur) => {
                             // we have a timeout, so send a heartbeat message
                             if let Err(err) = TMLMessage::heartbeat_message().write_to_async(&mut tx).await {
                                 error!("Error sending SLE TML hearbeat message: {}", err);
@@ -269,7 +270,7 @@ impl RAFClient {
                             }
                         },
                         _ = cancel2.cancelled() => {
-                            debug!("RAF client for {} has been cancelled (read task)", sii2);
+                            debug!("RAF client for {} has been cancelled (write task)", sii2);
                             if let Ok(tml) = process_sle_msg(SlePdu::SlePeerAbort{ diagnostic: PeerAbortDiagnostic::OtherReason}, raf_state3.clone()) {
                                 let _ = tml.write_to_async(&mut tx).await;
                             }

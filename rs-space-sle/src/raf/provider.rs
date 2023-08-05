@@ -6,10 +6,14 @@ use std::{
 use log::{debug, error, info, warn};
 use rasn::types::*;
 
+use rs_space_core::time::TimeEncoding;
 use tokio::{
-    net::{tcp::OwnedReadHalf, TcpListener},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpListener,
+    },
     select,
-    task::JoinHandle,
+    sync::mpsc::{channel, Receiver, Sender},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -31,6 +35,14 @@ use super::{
     asn1::FrameOrNotification, config::RAFProviderConfig, provider_state::InternalRAFProviderState,
 };
 
+const QUEUE_SIZE: usize = 500;
+
+pub enum SleMsg {
+    Stop,
+    BindReturn(SlePdu, u16, u16),
+    PDU(SlePdu),
+}
+
 type InternalState = Arc<Mutex<InternalRAFProviderState>>;
 
 type Notifier = Arc<Mutex<dyn ProviderNotifier + Send + Sync>>;
@@ -40,9 +52,8 @@ pub struct RAFProvider {
     raf_config: RAFProviderConfig,
     state: InternalState,
     cancel_token: CancellationToken,
-    read_task: Option<JoinHandle<()>>,
-    write_task: Option<JoinHandle<()>>,
     app_notifier: Notifier,
+    chan: Option<Sender<SleMsg>>,
 }
 
 impl RAFProvider {
@@ -56,9 +67,8 @@ impl RAFProvider {
             raf_config: raf_config.clone(),
             state: Arc::new(Mutex::new(InternalRAFProviderState::new(common_config))),
             cancel_token: CancellationToken::new(),
-            read_task: None,
-            write_task: None,
             app_notifier: notifier,
+            chan: None,
         }
     }
 
@@ -73,12 +83,22 @@ impl RAFProvider {
             self.raf_config.sii, peer
         );
 
-        let (mut rx, _tx) = socket.into_split();
+        let (sender, mut receiver) = channel::<SleMsg>(QUEUE_SIZE);
+        self.chan = Some(sender);
+
+        let (mut rx, tx) = socket.into_split();
+
         let cancel2 = self.cancel_token.clone();
+        let cancel3 = self.cancel_token.clone();
+
         let config2 = self.common_config.clone();
+        let config3 = self.common_config.clone();
         let raf_config2 = self.raf_config.clone();
+        let raf_config3 = self.raf_config.clone();
+
         let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
         let state2 = self.state.clone();
+
         let notifier = self.app_notifier.clone();
 
         let read_handle = tokio::spawn(async move {
@@ -113,10 +133,27 @@ impl RAFProvider {
             }
         });
 
-        let write_handle = tokio::spawn(async move {});
+        let write_handle = tokio::spawn(async move {
+            match write_task(
+                &config3,
+                &raf_config3,
+                tx,
+                &mut receiver,
+                cancel3.clone(),
+            )
+            .await
+            {
+                Err(err) => {
+                    error!("Error in write task: {err}");
+                    cancel3.cancel();
+                }
+                Ok(_) => cancel3.cancel(),
+            }
+        });
 
-        self.read_task = Some(read_handle);
-        self.write_task = Some(write_handle);
+        // we keep running, so we await on the handles of the tasks
+        let _ = read_handle.await;
+        let _ = write_handle.await;
 
         Ok(())
     }
@@ -131,7 +168,7 @@ async fn read_context_message(
     rx: &mut OwnedReadHalf,
     server_startup_interval: Duration,
 ) -> Result<(u16, u16), String> {
-    select!(
+    select! {
         res = TMLMessage::async_read(rx) => {
             match res {
                 Err(err) => { return Err(format!("Error reading TML Context Message: {err}")); }
@@ -139,9 +176,6 @@ async fn read_context_message(
                     debug!("Read TML message {msg:?}");
 
                     let (interval, dead_factor) = msg.check_context()?;
-
-                    debug!("TML context message ok, interval = {interval}, dead_factor = {dead_factor}");
-
                     let tml = &config.tml;
 
                     if interval < tml.min_heartbeat || interval > tml.max_heartbeat {
@@ -159,7 +193,7 @@ async fn read_context_message(
         _ = tokio::time::sleep(server_startup_interval) => {
             return Err("Timeout waiting for TML Context Message".to_string());
         }
-    );
+    };
 }
 
 async fn read_pdus(
@@ -175,7 +209,9 @@ async fn read_pdus(
     let timeout = Duration::from_secs(interval as u64 * dead_factor as u64);
 
     loop {
-        select!(
+        select! {
+            biased;
+
             res = TMLMessage::async_read(rx) => {
                 match res {
                     Err(err) => {
@@ -195,7 +231,11 @@ async fn read_pdus(
             _ = tokio::time::sleep(timeout) => {
                 return Err(format!("Timeout waiting for heartbeat message"));
             }
-        );
+            _ = cancel_token.cancelled() => {
+                debug!("RAF provider for {} read loop has been cancelled", raf_config.sii);
+                return Ok(());
+            }
+        };
     }
 }
 
@@ -424,6 +464,68 @@ async fn process_sle_pdu(
     }
 }
 
+async fn write_task(
+    common_config: &CommonConfig,
+    raf_config: &RAFProviderConfig,
+    mut tx: OwnedWriteHalf,
+    receiver: &mut Receiver<SleMsg>,
+    cancel: CancellationToken,
+) -> Result<(), String> {
+    let mut timeout = common_config.tml.heartbeat;
+
+    loop {
+        select! {
+                res = receiver.recv() => {
+                    match res {
+                        Some(SleMsg::Stop) => {
+                            debug!("Stop requested");
+                            return Ok(());
+                        }
+                        Some(SleMsg::BindReturn(pdu, hb, _dead_factor)) => {
+                            timeout = hb;
+                            send_sle_msg(pdu, &mut tx).await?;
+                        }
+                        Some(SleMsg::PDU(pdu)) => {
+                            send_sle_msg(pdu, &mut tx).await?;
+                        }
+                        None => {
+                            debug!("Send channel has been closed, returning...");
+                            return Ok(());
+                        }
+                    }
+                },
+                _ = tokio::time::sleep(Duration::from_secs(timeout as u64)) => {
+                    // we have a timeout, so send a heartbeat message
+                    if let Err(err) = TMLMessage::heartbeat_message().write_to_async(&mut tx).await {
+                        return Err(format!("Error sending SLE TML hearbeat message: {}", err));
+                    }
+                },
+                _ = cancel.cancelled() => {
+                    debug!("RAF provider for {} has been cancelled (write task)", raf_config.sii);
+                    // if let Ok(tml) = process_sle_msg(SlePdu::SlePeerAbort{ diagnostic: PeerAbortDiagnostic::OtherReason}, raf_state3.clone()) {
+                    //     let _ = tml.write_to_async(&mut tx).await;
+                    // }
+                    return Ok(());
+                }
+        }
+    }
+}
+
+async fn send_sle_msg(pdu: SlePdu, tx: &mut OwnedWriteHalf) -> Result<(), String> {
+    match rasn::der::encode(&pdu) {
+        Err(err) => {
+            return Err(format!("Error encoding PDU to ASN1: {err}"));
+        }
+        Ok(val) => {
+            let tml = TMLMessage::new_with_data(val);
+            if let Err(err) = tml.write_to_async(tx).await {
+                return Err(format!("Could not send SLE PDU: {err}"));
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn process_bind(
     raf_config: &RAFProviderConfig,
     state: InternalState,
@@ -470,6 +572,9 @@ async fn process_bind(
         lock.process_bind(initiator_identifier, version)
     }
 
+    // send a positive response
+    // let pdu = SlePdu::SleBindReturn { performer_credentials: (), responder_identifier: raf_config.provider, result: () }
+
     info!("BIND on {} successful", sii);
 
     {
@@ -478,3 +583,16 @@ async fn process_bind(
     }
     Ok(())
 }
+
+// fn new_credentials(config: &CommonConfig) -> Credentials {
+//     match config.auth_type {
+//         SleAuthType::AuthNone => Credentials::Unused,
+//         SleAuthType::AuthAll | SleAuthType::AuthBind => {
+//             let isp1 = ISP1Credentials::new(
+//                 config.hash_to_use,
+//                 &Time::now(TimeEncoding::CDS8),
+
+//             )
+//         }
+//     }
+// }

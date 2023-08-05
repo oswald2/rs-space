@@ -95,7 +95,7 @@ impl TMLMessage {
                     return Err(format!("Error parsing TML Context Message: {}", err));
                 }
 
-                // Check for the ISP1 Value
+                // Check for the ISP1 Value, maps to "ISP1\0\0\01"
                 let comp: [u8; 8] = [73, 83, 80, 49, 0, 0, 0, 1];
                 if comp != buf {
                     return Err(
