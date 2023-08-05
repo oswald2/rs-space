@@ -24,6 +24,16 @@ pub enum SleVersion {
     V5 = 5,
 }
 
+impl std::fmt::Display for SleVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SleVersion::V3 => write!(f, "3"),
+            SleVersion::V4 => write!(f, "4"),
+            SleVersion::V5 => write!(f, "5"),
+        }
+    }
+}
+
 impl TryFrom<u8> for SleVersion {
     type Error = String;
 
@@ -91,23 +101,25 @@ pub fn from_ccsds_time_pico(t: &TimeCCSDSpico) -> Result<rs_space_core::time::Ti
 pub fn convert_ccsds_time(t: &Time) -> Result<rs_space_core::time::Time, String> {
     match t {
         Time::CcsdsFormat(t) => {
-            if t.len() != 8 { 
-                return Err(format!("Error converting CCSDS Time: illegal length {}", t.len()));
+            if t.len() != 8 {
+                return Err(format!(
+                    "Error converting CCSDS Time: illegal length {}",
+                    t.len()
+                ));
             }
             from_ccsds_time(t)
         }
         Time::CcsdsPicoFormat(t) => {
-            if t.len() != 10 { 
-                return Err(format!("Error converting CCSDS Pico Time: illegal length {}", t.len()));
+            if t.len() != 10 {
+                return Err(format!(
+                    "Error converting CCSDS Pico Time: illegal length {}",
+                    t.len()
+                ));
             }
             from_ccsds_time_pico(t)
         }
-   
     }
-    
 }
-
-
 
 // ASN1 common types
 #[derive(Debug, Clone, PartialEq, AsnType)]

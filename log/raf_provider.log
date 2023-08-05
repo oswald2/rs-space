@@ -1,0 +1,18 @@
+INFO - RAF Provider started
+INFO - Starting SLE instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - Connection on RAF instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 from [::1]:53524
+ERROR - Error reading SLE TML Context Message: Error parsing TML Context Message: ISP1 value not found or wrong version
+INFO - RAF Provider started
+INFO - Starting SLE instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - Connection on RAF instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 from [::1]:52438
+DEBUG - Read TML message TMLMessage { msg_type: ContextMessage, length: 12, data: [73, 83, 80, 49, 0, 0, 0, 1, 0, 30, 0, 2] }
+ERROR - Error reading SLE TML Context Message: Error parsing TML Context Message: ISP1 value not found or wrong version
+INFO - RAF Provider started
+INFO - Starting SLE instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - Connection on RAF instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 from [::1]:56490
+DEBUG - Read TML message TMLMessage { msg_type: ContextMessage, length: 12, data: [73, 83, 80, 49, 0, 0, 0, 1, 0, 30, 0, 2] }
+INFO - RAF Provider started
+INFO - Starting SLE instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - Connection on RAF instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 from [::1]:41912
+DEBUG - Read TML message TMLMessage { msg_type: ContextMessage, length: 12, data: [73, 83, 80, 49, 0, 0, 0, 1, 0, 30, 0, 2] }
+DEBUG - TML context message ok, interval = 30, dead_factor = 2

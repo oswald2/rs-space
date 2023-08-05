@@ -9,3 +9,4 @@ members = [
     "raf_provider",
     "bind_test"
 ]
+resolver = "2"

@@ -15,11 +15,15 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     asn1::{ApplicationIdentifier, AuthorityIdentifier, PortId, SlePdu, VersionNumber},
+    provider::app_interface::ProviderNotifier,
     sle::config::{CommonConfig, SleAuthType},
     tml::message::TMLMessage,
     types::{
         aul::{check_credentials, ISP1Credentials},
-        sle::{Credentials, ServiceInstanceIdentifier, SleVersion, service_instance_identifier_to_string},
+        sle::{
+            service_instance_identifier_to_string, Credentials, ServiceInstanceIdentifier,
+            SleVersion,
+        },
     },
 };
 
@@ -29,6 +33,8 @@ use super::{
 
 type InternalState = Arc<Mutex<InternalRAFProviderState>>;
 
+type Notifier = Arc<Mutex<dyn ProviderNotifier + Send + Sync>>;
+
 pub struct RAFProvider {
     common_config: CommonConfig,
     raf_config: RAFProviderConfig,
@@ -36,10 +42,15 @@ pub struct RAFProvider {
     cancel_token: CancellationToken,
     read_task: Option<JoinHandle<()>>,
     write_task: Option<JoinHandle<()>>,
+    app_notifier: Notifier,
 }
 
 impl RAFProvider {
-    pub fn new(common_config: &CommonConfig, raf_config: &RAFProviderConfig) -> RAFProvider {
+    pub fn new(
+        common_config: &CommonConfig,
+        raf_config: &RAFProviderConfig,
+        notifier: Notifier,
+    ) -> RAFProvider {
         RAFProvider {
             common_config: common_config.clone(),
             raf_config: raf_config.clone(),
@@ -47,6 +58,7 @@ impl RAFProvider {
             cancel_token: CancellationToken::new(),
             read_task: None,
             write_task: None,
+            app_notifier: notifier,
         }
     }
 
@@ -61,12 +73,13 @@ impl RAFProvider {
             self.raf_config.sii, peer
         );
 
-        let (mut rx, tx) = socket.into_split();
+        let (mut rx, _tx) = socket.into_split();
         let cancel2 = self.cancel_token.clone();
         let config2 = self.common_config.clone();
         let raf_config2 = self.raf_config.clone();
         let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
         let state2 = self.state.clone();
+        let notifier = self.app_notifier.clone();
 
         let read_handle = tokio::spawn(async move {
             // First, we expect a TML context message. If not, we bail out
@@ -79,6 +92,7 @@ impl RAFProvider {
                     match read_pdus(
                         &config2,
                         &raf_config2,
+                        notifier,
                         cancel2.clone(),
                         state2,
                         &mut rx,
@@ -122,7 +136,11 @@ async fn read_context_message(
             match res {
                 Err(err) => { return Err(format!("Error reading TML Context Message: {err}")); }
                 Ok(msg) => {
+                    debug!("Read TML message {msg:?}");
+
                     let (interval, dead_factor) = msg.check_context()?;
+
+                    debug!("TML context message ok, interval = {interval}, dead_factor = {dead_factor}");
 
                     let tml = &config.tml;
 
@@ -147,6 +165,7 @@ async fn read_context_message(
 async fn read_pdus(
     config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    notifier: Notifier,
     cancel_token: CancellationToken,
     state: InternalState,
     rx: &mut OwnedReadHalf,
@@ -168,7 +187,7 @@ async fn read_pdus(
                         }
                         else
                         {
-                            parse_sle_message(config, raf_config, cancel_token.clone(), state.clone(), &msg).await;
+                            parse_sle_message(config, raf_config, notifier.clone(), cancel_token.clone(), state.clone(), &msg).await;
                         }
                     }
                 }
@@ -183,6 +202,7 @@ async fn read_pdus(
 async fn parse_sle_message(
     config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    notifier: Notifier,
     cancel_token: CancellationToken,
     state: InternalState,
     msg: &TMLMessage,
@@ -202,7 +222,7 @@ async fn parse_sle_message(
             }
 
             // then continue processing
-            process_sle_pdu(raf_config, &pdu, state).await;
+            process_sle_pdu(raf_config, &pdu, state, notifier).await;
         }
         Err(err) => {
             error!("Error on decoding SLE PDU: {err}");
@@ -367,7 +387,12 @@ fn check_peer(
     }
 }
 
-async fn process_sle_pdu(raf_config: &RAFProviderConfig, pdu: &SlePdu, state: InternalState) {
+async fn process_sle_pdu(
+    raf_config: &RAFProviderConfig,
+    pdu: &SlePdu,
+    state: InternalState,
+    notifier: Notifier,
+) {
     match pdu {
         SlePdu::SleBindInvocation {
             invoker_credentials: _,
@@ -380,6 +405,8 @@ async fn process_sle_pdu(raf_config: &RAFProviderConfig, pdu: &SlePdu, state: In
             // First: perform checks
             if let Err(err) = process_bind(
                 raf_config,
+                state.clone(),
+                notifier,
                 initiator_identifier,
                 responder_port_identifier,
                 service_type,
@@ -399,18 +426,21 @@ async fn process_sle_pdu(raf_config: &RAFProviderConfig, pdu: &SlePdu, state: In
 
 async fn process_bind(
     raf_config: &RAFProviderConfig,
+    state: InternalState,
+    notifier: Notifier,
     initiator_identifier: &AuthorityIdentifier,
     responder_port_identifier: &PortId,
     service_type: &Integer,
     version_number: &VersionNumber,
     service_instance_identifier: &ServiceInstanceIdentifier,
 ) -> Result<(), String> {
-
     // First perform all checks to see if the BIND request is legal
-    let appl = match ApplicationIdentifier::try_from(service_type) {
+    let _appl = match ApplicationIdentifier::try_from(service_type) {
         Ok(ApplicationIdentifier::RtnAllFrames) => ApplicationIdentifier::RtnAllFrames,
         Ok(val) => {
-            return Err(format!("BIND with illegal application identifier for RAF: {val:?}"));
+            return Err(format!(
+                "BIND with illegal application identifier for RAF: {val:?}"
+            ));
         }
         Err(err) => {
             return Err(err);
@@ -421,7 +451,10 @@ async fn process_bind(
 
     let sii = service_instance_identifier_to_string(service_instance_identifier)?;
     if sii != raf_config.sii {
-        return Err(format!("BIND with illegal service instance ID: {}, allowed: {}", sii, raf_config.sii));
+        return Err(format!(
+            "BIND with illegal service instance ID: {}, allowed: {}",
+            sii, raf_config.sii
+        ));
     }
 
     if responder_port_identifier.value != raf_config.responder_port {
@@ -430,8 +463,18 @@ async fn process_bind(
             responder_port_identifier.value, raf_config.responder_port
         ));
     }
-    
-    // Ok, BIND is ok, so process the request now
 
+    // Ok, BIND is ok, so process the request now
+    {
+        let mut lock = state.lock().unwrap();
+        lock.process_bind(initiator_identifier, version)
+    }
+
+    info!("BIND on {} successful", sii);
+
+    {
+        let lock = notifier.lock().unwrap();
+        lock.bind_succeeded(&initiator_identifier.value, &sii, version);
+    }
     Ok(())
 }

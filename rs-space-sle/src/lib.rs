@@ -23,4 +23,5 @@ pub mod user {
 }
 pub mod provider {
     pub mod config;
+    pub mod app_interface;
 }

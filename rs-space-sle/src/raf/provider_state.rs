@@ -1,6 +1,6 @@
 use rasn::types::{Utf8String, VisibleString};
 
-use crate::sle::config::CommonConfig;
+use crate::{sle::config::CommonConfig, types::sle::SleVersion, asn1::AuthorityIdentifier};
 
 use super::state::RAFState;
 
@@ -9,7 +9,8 @@ pub struct InternalRAFProviderState {
     state: RAFState,
     interval: u16,
     dead_factor: u16,
-    user: VisibleString
+    user: VisibleString,
+    version: SleVersion,
 }
 
 impl InternalRAFProviderState {
@@ -19,6 +20,7 @@ impl InternalRAFProviderState {
             interval: config.tml.heartbeat,
             dead_factor: config.tml.dead_factor,
             user: VisibleString::new(Utf8String::from("")),
+            version: SleVersion::V3,
         }
     }
 
@@ -33,5 +35,11 @@ impl InternalRAFProviderState {
 
     pub fn user(&self) -> &VisibleString {
         &self.user
+    }
+
+    pub fn process_bind(&mut self, initiator: &AuthorityIdentifier, version: SleVersion) {
+        self.user = initiator.clone();
+        self.version = version;
+        self.state = RAFState::Bound;
     }
 }

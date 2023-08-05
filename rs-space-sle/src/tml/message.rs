@@ -96,8 +96,8 @@ impl TMLMessage {
                 }
 
                 // Check for the ISP1 Value
-                let comp = b"ISP1\0\0\01";
-                if comp != &buf {
+                let comp: [u8; 8] = [73, 83, 80, 49, 0, 0, 0, 1];
+                if comp != buf {
                     return Err(
                         "Error parsing TML Context Message: ISP1 value not found or wrong version"
                             .to_string(),

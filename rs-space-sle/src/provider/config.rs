@@ -1,4 +1,4 @@
-use crate::raf::config::RAFConfig;
+use crate::raf::config::RAFProviderConfig;
 use crate::sle::config::{CommonConfig, CommonConfigExt};
 
 use serde::{Deserialize, Serialize};
@@ -9,13 +9,13 @@ use tokio::io::{Error, ErrorKind};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfigExt {
     pub common: CommonConfigExt,
-    pub rafs: Vec<RAFConfig>,
+    pub rafs: Vec<RAFProviderConfig>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ProviderConfig {
     pub common: CommonConfig,
-    pub rafs: Vec<RAFConfig>,
+    pub rafs: Vec<RAFProviderConfig>,
 }
 
 impl ProviderConfig {
@@ -31,7 +31,7 @@ impl Default for ProviderConfigExt {
     fn default() -> Self {
         ProviderConfigExt {
             common: CommonConfigExt::default(),
-            rafs: vec![RAFConfig::default()],
+            rafs: vec![RAFProviderConfig::default()],
         }
     }
 }

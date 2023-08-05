@@ -6,7 +6,7 @@ use rasn::{
 };
 use sha1_smol::Sha1;
 
-use crate::sle::config::{HashToUse, CommonConfig};
+use crate::sle::config::{HashToUse};
 
 use super::sle::{to_ccsds_time, TimeCCSDS};
 

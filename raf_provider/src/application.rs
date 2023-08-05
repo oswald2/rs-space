@@ -1,7 +1,16 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
 
-use rs_space_sle::provider::config::ProviderConfig;
+use log::{info, error};
+use rs_space_sle::raf::provider::RAFProvider;
+use rs_space_sle::sle::config::CommonConfig;
+use rs_space_sle::{
+    provider::{app_interface::ProviderNotifier, config::ProviderConfig},
+    raf::config::RAFProviderConfig,
+    types::sle::SleVersion,
+};
+
 //use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
 
@@ -11,9 +20,24 @@ use tokio::io::Error;
 //     info!("Got Frame: {:?}", frame);
 // }
 
+struct Notifier {}
 
-pub async fn run_app(_config: &ProviderConfig) -> Result<(), Error> {
-    // for raf_config in &config.rafs {
+impl Notifier {
+    pub fn new() -> Notifier {
+        Notifier {}
+    }
+}
+
+impl ProviderNotifier for Notifier {
+    fn bind_succeeded(&self, peer: &str, sii: &str, version: SleVersion) {
+        info!("BIND SUCCEEDED from {peer} for {sii} for version {version}");
+    }
+}
+
+pub async fn run_app(config: &ProviderConfig) -> Result<(), Error> {
+    for raf_config in &config.rafs {
+        run_service_instance(&config.common, raf_config.clone()).await;
+    }
     //     let config = (*config).clone();
     //     let raf_config = (*raf_config).clone();
 
@@ -51,4 +75,21 @@ pub async fn run_app(_config: &ProviderConfig) -> Result<(), Error> {
     //     raf.stop_processing().await;
     // }
     Ok(())
+}
+
+async fn run_service_instance(common_config: &CommonConfig, config: RAFProviderConfig) {
+    let config2 = common_config.clone();
+    
+    info!("Starting SLE instance {}", config.sii);
+
+    let hdl = tokio::spawn(async move {
+        let notifier = Arc::new(Mutex::new(Notifier::new()));
+
+        let mut provider = RAFProvider::new(&config2, &config, notifier);
+
+        if let Err(err) = provider.run().await {
+            error!("Provider run returned error: {err}");
+        }
+    });
+    let _ = hdl.await;
 }
