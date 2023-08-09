@@ -15,7 +15,6 @@ pub enum RAFState {
 
 pub type FrameCallback = fn(&SleTMFrame);
 
-
 // Example code from ChatGPT for Async function pointers:
 
 // use std::pin::Pin;
@@ -33,11 +32,6 @@ pub type FrameCallback = fn(&SleTMFrame);
 //     let func: AsyncFnPointer<i32> = Box::new(|| Box::pin(example()));
 //     let fut = func();
 // }
-
-
-
-
-
 
 #[derive(Debug, Clone)]
 pub struct InternalRAFState {
@@ -112,7 +106,7 @@ impl InternalRAFState {
     pub fn process_peer_abort(&mut self, res: &PeerAbortDiagnostic) {
         warn!("Received PEER ABORT with diagnostic: {:?}", res);
         self.reset();
-    }   
+    }
 
     pub fn get_state(&self) -> RAFState {
         self.state

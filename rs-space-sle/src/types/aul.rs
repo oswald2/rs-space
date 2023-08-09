@@ -6,7 +6,7 @@ use rasn::{
 };
 use sha1_smol::Sha1;
 
-use crate::sle::config::{HashToUse};
+use crate::sle::config::HashToUse;
 
 use super::sle::{to_ccsds_time, TimeCCSDS};
 
@@ -93,4 +93,3 @@ pub fn check_credentials(
 
     prot == credentials.the_protected
 }
-

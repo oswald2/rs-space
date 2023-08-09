@@ -1,10 +1,10 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use rasn::{AsnType, Decode, Encode};
 use rasn::prelude::*;
+use rasn::{AsnType, Decode, Encode};
 
-use crate::types::sle::{Diagnostics, Time, Credentials, convert_ccsds_time};
+use crate::types::sle::{convert_ccsds_time, Credentials, Diagnostics, Time};
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(enumerated)]
@@ -60,7 +60,6 @@ pub enum RafStartReturnResult {
     NegativeResult(DiagnosticRafStart),
 }
 
-
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum AntennaId {
@@ -89,7 +88,6 @@ impl TryFrom<i32> for FrameQuality {
         }
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LockStatus {
@@ -154,22 +152,19 @@ pub struct SleTMFrame {
     pub data: SpaceLinkDataUnit,
 }
 
-
 pub fn convert_frame(frame: &RafTransferDataInvocation) -> Result<SleTMFrame, String> {
     let t = convert_ccsds_time(&frame.earth_receive_time)?;
     let fq = FrameQuality::try_from(frame.delivered_frame_quality)?;
-    
+
     Ok(SleTMFrame {
         earth_receive_time: t,
         antenna_id: frame.antenna_id.clone(),
         data_link_continuity: frame.data_link_continuity,
         delivered_frame_quality: fq,
         private_annotation: frame.private_annotation.clone(),
-        data: frame.data.clone()
+        data: frame.data.clone(),
     })
 }
-
-
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
@@ -189,4 +184,3 @@ pub struct RafSyncNotifyInvocation {
 pub type RafTransferBuffer = Vec<FrameOrNotification>;
 
 pub type SpaceLinkDataUnit = OctetString;
-

@@ -1,6 +1,6 @@
 use rasn::types::{Utf8String, VisibleString};
 
-use crate::{sle::config::CommonConfig, types::sle::SleVersion, asn1::AuthorityIdentifier};
+use crate::{asn1::AuthorityIdentifier, sle::config::CommonConfig, types::sle::SleVersion};
 
 use super::state::RAFState;
 

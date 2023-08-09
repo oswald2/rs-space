@@ -4,9 +4,9 @@ use std::{
 };
 
 use log::{debug, error, info, warn};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use rasn::types::*;
 
-use rs_space_core::time::TimeEncoding;
 use tokio::{
     net::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -18,7 +18,10 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    asn1::{ApplicationIdentifier, AuthorityIdentifier, PortId, SlePdu, VersionNumber},
+    asn1::{
+        ApplicationIdentifier, AuthorityIdentifier, BindDiagnostic, BindResult, PortId, SlePdu,
+        VersionNumber,
+    },
     provider::app_interface::ProviderNotifier,
     sle::config::{CommonConfig, SleAuthType},
     tml::message::TMLMessage,
@@ -30,6 +33,7 @@ use crate::{
         },
     },
 };
+use rs_space_core::time::{Time, TimeEncoding};
 
 use super::{
     asn1::FrameOrNotification, config::RAFProviderConfig, provider_state::InternalRAFProviderState,
@@ -84,6 +88,7 @@ impl RAFProvider {
         );
 
         let (sender, mut receiver) = channel::<SleMsg>(QUEUE_SIZE);
+        let sender2 = sender.clone();
         self.chan = Some(sender);
 
         let (mut rx, tx) = socket.into_split();
@@ -101,6 +106,8 @@ impl RAFProvider {
 
         let notifier = self.app_notifier.clone();
 
+        let mut rand: StdRng = SeedableRng::from_entropy();
+
         let read_handle = tokio::spawn(async move {
             // First, we expect a TML context message. If not, we bail out
             match read_context_message(&config2, &mut rx, server_timeout).await {
@@ -112,6 +119,8 @@ impl RAFProvider {
                     match read_pdus(
                         &config2,
                         &raf_config2,
+                        &mut rand,
+                        &sender2,
                         notifier,
                         cancel2.clone(),
                         state2,
@@ -134,15 +143,7 @@ impl RAFProvider {
         });
 
         let write_handle = tokio::spawn(async move {
-            match write_task(
-                &config3,
-                &raf_config3,
-                tx,
-                &mut receiver,
-                cancel3.clone(),
-            )
-            .await
-            {
+            match write_task(&config3, &raf_config3, tx, &mut receiver, cancel3.clone()).await {
                 Err(err) => {
                     error!("Error in write task: {err}");
                     cancel3.cancel();
@@ -199,6 +200,8 @@ async fn read_context_message(
 async fn read_pdus(
     config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    rand: &mut StdRng,
+    sender: &Sender<SleMsg>,
     notifier: Notifier,
     cancel_token: CancellationToken,
     state: InternalState,
@@ -223,7 +226,7 @@ async fn read_pdus(
                         }
                         else
                         {
-                            parse_sle_message(config, raf_config, notifier.clone(), cancel_token.clone(), state.clone(), &msg).await;
+                            parse_sle_message(config, raf_config, rand, interval, dead_factor, sender, notifier.clone(), cancel_token.clone(), state.clone(), &msg).await;
                         }
                     }
                 }
@@ -242,6 +245,10 @@ async fn read_pdus(
 async fn parse_sle_message(
     config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    rand: &mut StdRng,
+    interval: u16, 
+    dead_factor: u16,
+    sender: &Sender<SleMsg>,
     notifier: Notifier,
     cancel_token: CancellationToken,
     state: InternalState,
@@ -255,14 +262,8 @@ async fn parse_sle_message(
             cancel_token.cancel();
         }
         Ok(pdu) => {
-            // check authentication
-            if !check_authentication(config, state.clone(), &pdu) {
-                error!("SLE PDU failed authentication");
-                cancel_token.cancel();
-            }
-
             // then continue processing
-            process_sle_pdu(raf_config, &pdu, state, notifier).await;
+            process_sle_pdu(config, raf_config, rand, &pdu, interval, dead_factor, state, sender, notifier).await;
         }
         Err(err) => {
             error!("Error on decoding SLE PDU: {err}");
@@ -428,9 +429,14 @@ fn check_peer(
 }
 
 async fn process_sle_pdu(
+    common_config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    rand: &mut StdRng,
     pdu: &SlePdu,
+    interval: u16,
+    dead_factor: u16,
     state: InternalState,
+    sender: &Sender<SleMsg>,
     notifier: Notifier,
 ) {
     match pdu {
@@ -442,9 +448,29 @@ async fn process_sle_pdu(
             version_number,
             service_instance_identifier,
         } => {
+            // check authentication
+            if !check_authentication(common_config, state.clone(), &pdu) {
+                error!("SLE PDU failed authentication");
+
+                let credentials = new_credentials(common_config, rand);
+
+                // send back a negative acknowledge
+                let ret = SlePdu::SleBindReturn {
+                    performer_credentials: credentials,
+                    responder_identifier: VisibleString::new(raf_config.provider.clone()),
+                    result: BindResult::BindDiag(BindDiagnostic::AccessDenied),
+                };
+
+                let _ = sender.send(SleMsg::PDU(ret)).await;
+                return;
+            }
+
             // First: perform checks
             if let Err(err) = process_bind(
+                common_config,
                 raf_config,
+                rand,
+                sender,
                 state.clone(),
                 notifier,
                 initiator_identifier,
@@ -452,6 +478,8 @@ async fn process_sle_pdu(
                 service_type,
                 version_number,
                 service_instance_identifier,
+                interval, 
+                dead_factor
             )
             .await
             {
@@ -527,7 +555,10 @@ async fn send_sle_msg(pdu: SlePdu, tx: &mut OwnedWriteHalf) -> Result<(), String
 }
 
 async fn process_bind(
+    common_config: &CommonConfig,
     raf_config: &RAFProviderConfig,
+    rand: &mut StdRng,
+    sender: &Sender<SleMsg>,
     state: InternalState,
     notifier: Notifier,
     initiator_identifier: &AuthorityIdentifier,
@@ -535,64 +566,78 @@ async fn process_bind(
     service_type: &Integer,
     version_number: &VersionNumber,
     service_instance_identifier: &ServiceInstanceIdentifier,
+    interval: u16,
+    dead_factor: u16
 ) -> Result<(), String> {
     // First perform all checks to see if the BIND request is legal
-    let _appl = match ApplicationIdentifier::try_from(service_type) {
-        Ok(ApplicationIdentifier::RtnAllFrames) => ApplicationIdentifier::RtnAllFrames,
-        Ok(val) => {
-            return Err(format!(
-                "BIND with illegal application identifier for RAF: {val:?}"
-            ));
+    let (bind_result, version) = 
+        if match ApplicationIdentifier::try_from(service_type) {
+            Ok(ApplicationIdentifier::RtnAllFrames) => true,
+            Ok(_) => false,
+            Err(_) => false
+        } { (BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported), SleVersion::V5) }
+        else {
+            match SleVersion::try_from(*version_number as u8) {
+                Err(_) => (BindResult::BindDiag(BindDiagnostic::VersionNotSupported), SleVersion::V5), 
+                Ok(version) => {
+                    match service_instance_identifier_to_string(service_instance_identifier) {
+                        Err(_) => (BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance), SleVersion::V5),
+                        Ok(sii) => {
+                            if sii != raf_config.sii {
+                                (BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance), SleVersion::V5)
+                            } else {
+                                if responder_port_identifier.value != raf_config.responder_port {
+                                    (BindResult::BindDiag(BindDiagnostic::SiNotAccessibleToThisInitiator), SleVersion::V5)
+                                } else {
+                                    // Ok, BIND is ok, so process the request now
+                                    let mut lock = state.lock().unwrap();
+                                    lock.process_bind(initiator_identifier, version);
+                                    (BindResult::BindOK(version as u16), version)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+    match bind_result {
+        BindResult::BindOK(_) => {
+            info!("BIND on {} successful", raf_config.sii);
         }
-        Err(err) => {
-            return Err(err);
+        BindResult::BindDiag(diag) => {
+            return Err(format!("BIND on {} failed: {diag:?}", raf_config.sii));
         }
     };
+    
+    // send a response
+    let credentials = new_credentials(common_config, rand);
+    let pdu = SlePdu::SleBindReturn { performer_credentials: credentials, 
+            responder_identifier: VisibleString::new(raf_config.provider.clone()), 
+            result: bind_result };
 
-    let version = SleVersion::try_from(*version_number as u8)?;
-
-    let sii = service_instance_identifier_to_string(service_instance_identifier)?;
-    if sii != raf_config.sii {
-        return Err(format!(
-            "BIND with illegal service instance ID: {}, allowed: {}",
-            sii, raf_config.sii
-        ));
-    }
-
-    if responder_port_identifier.value != raf_config.responder_port {
-        return Err(format!(
-            "BIND requested illegal port {}, allowed is {}",
-            responder_port_identifier.value, raf_config.responder_port
-        ));
-    }
-
-    // Ok, BIND is ok, so process the request now
-    {
-        let mut lock = state.lock().unwrap();
-        lock.process_bind(initiator_identifier, version)
-    }
-
-    // send a positive response
-    // let pdu = SlePdu::SleBindReturn { performer_credentials: (), responder_identifier: raf_config.provider, result: () }
-
-    info!("BIND on {} successful", sii);
+    let _ = sender.send(SleMsg::BindReturn(pdu, interval, dead_factor)).await;
 
     {
         let lock = notifier.lock().unwrap();
-        lock.bind_succeeded(&initiator_identifier.value, &sii, version);
+        lock.bind_succeeded(&initiator_identifier.value, &raf_config.sii, version);
     }
+
     Ok(())
 }
 
-// fn new_credentials(config: &CommonConfig) -> Credentials {
-//     match config.auth_type {
-//         SleAuthType::AuthNone => Credentials::Unused,
-//         SleAuthType::AuthAll | SleAuthType::AuthBind => {
-//             let isp1 = ISP1Credentials::new(
-//                 config.hash_to_use,
-//                 &Time::now(TimeEncoding::CDS8),
-
-//             )
-//         }
-//     }
-// }
+fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
+    match config.auth_type {
+        SleAuthType::AuthNone => Credentials::Unused,
+        SleAuthType::AuthAll | SleAuthType::AuthBind => {
+            let isp1 = ISP1Credentials::new(
+                config.hash_to_use,
+                &Time::now(TimeEncoding::CDS8),
+                rand.gen(),
+                &config.authority_identifier,
+                &config.password,
+            );
+            Credentials::Used(isp1)
+        }
+    }
+}

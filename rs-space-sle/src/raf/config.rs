@@ -38,7 +38,6 @@ pub struct RAFProviderConfig {
     pub sle_operation_timeout: u16,
 }
 
-
 impl Default for RAFProviderConfig {
     fn default() -> Self {
         RAFProviderConfig {
