@@ -1,5 +1,6 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
+use num_traits::ToPrimitive;
 
 use rasn::prelude::*;
 use rasn::{AsnType, Decode, Encode};
@@ -14,15 +15,16 @@ pub enum RequestedFrameQuality {
     AllFrames = 2,
 }
 
-impl TryFrom<u32> for RequestedFrameQuality {
+impl TryFrom<&Integer> for RequestedFrameQuality {
     type Error = String;
 
-    fn try_from(val: u32) -> Result<RequestedFrameQuality, String> {
-        match val {
-            0 => Ok(RequestedFrameQuality::GoodFramesOnly),
-            1 => Ok(RequestedFrameQuality::ErredFramesOnly),
-            2 => Ok(RequestedFrameQuality::AllFrames),
-            x => Err(format!("Requested frame quality has unexpected value: {x}")),
+    fn try_from(val: &Integer) -> Result<RequestedFrameQuality, String> {
+        match val.to_i64() {
+            Some(0) => Ok(RequestedFrameQuality::GoodFramesOnly),
+            Some(1) => Ok(RequestedFrameQuality::ErredFramesOnly),
+            Some(2) => Ok(RequestedFrameQuality::AllFrames),
+            Some(x) => Err(format!("Requested frame quality has unexpected value: {x}")),
+            None => Err(format!("Requested frame quality has unexpected value")),
         }
     }
 }

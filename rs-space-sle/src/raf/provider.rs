@@ -18,19 +18,14 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    asn1::{
-        ApplicationIdentifier, AuthorityIdentifier, BindDiagnostic, BindResult, PortId, SlePdu,
-        VersionNumber,
-    },
+    asn1::*,
+    raf::asn1::*,
     provider::app_interface::ProviderNotifier,
     sle::config::{CommonConfig, SleAuthType},
     tml::message::TMLMessage,
     types::{
         aul::{check_credentials, ISP1Credentials},
-        sle::{
-            service_instance_identifier_to_string, Credentials, ServiceInstanceIdentifier,
-            SleVersion,
-        },
+        sle::*,
     },
 };
 use rs_space_core::time::{Time, TimeEncoding};
@@ -172,7 +167,7 @@ impl RAFProvider {
         });
 
         // The writer task. This listens on the mpsc channel for messages and reacts to them.
-        // The primary task is of course getting SLE PDUs via this channel, add 
+        // The primary task is of course getting SLE PDUs via this channel, add
         // authentication info if configured, encode them and send them to the socket.
         let write_handle = tokio::spawn(async move {
             match write_task(&config3, &raf_config3, tx, &mut receiver, cancel3.clone()).await {
@@ -465,7 +460,7 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
                 return;
             }
 
-            // First: perform checks
+            // Now do the processing of the BIND
             if let Err(err) = process_bind(
                 args,
                 initiator_identifier,
@@ -478,6 +473,68 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
             {
                 error!("Error processing BIND: {err}");
             }
+        }
+        SlePdu::SleUnbindInvocation {
+            invoker_credentials: _,
+            unbind_reason,
+            } => {
+            // check authentication
+            if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
+                warn!("SLE PDU UNBIND failed authentication, ignoring PDU...");
+
+                return;
+            }
+
+            // Processing of the UNBIND
+            if let Err(err) = process_unbind(
+                args,
+                unbind_reason,
+            )
+            .await
+            {
+                error!("Error processing UNBIND: {err}");
+            }
+        }
+        SlePdu::SlePeerAbort { diagnostic } => {
+            let _ = process_peer_abort(args, diagnostic).await;
+        }
+        SlePdu::SleRafStartInvocation {
+            invoker_credentials: _,
+            invoke_id,
+            start_time,
+            stop_time,
+            requested_frame_quality,
+        } => {
+            // check authentication
+            if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
+                error!("RAF START PDU failed authentication");
+
+                let credentials = new_credentials(&args.common_config, &mut args.rand);
+
+                // send back a negative acknowledge
+                let ret = SlePdu::SleRafStartReturn {
+                    performer_credentials: credentials,
+                    invoke_id: *invoke_id,
+                    result: RafStartReturnResult::NegativeResult(DiagnosticRafStart::Common(Diagnostics::OtherReason)),
+                };
+
+                let _ = args.chan.send(SleMsg::PDU(ret)).await;
+                return;
+            }
+
+            // Now do the processing of the BIND
+            if let Err(err) = process_start(
+                args,
+                invoke_id,
+                start_time,
+                stop_time,
+                requested_frame_quality,
+            )
+            .await
+            {
+                error!("Error processing BIND: {err}");
+            }
+           
         }
         pdu => {
             info!("Not yet implemented: processing for PDU: {:?}", pdu);
@@ -556,11 +613,15 @@ async fn process_bind(
     service_instance_identifier: &ServiceInstanceIdentifier,
 ) -> Result<(), String> {
     // First perform all checks to see if the BIND request is legal
-    let (bind_result, version) = if match ApplicationIdentifier::try_from(service_type) {
+
+    let app_id = ApplicationIdentifier::try_from(service_type);
+    let app_chk = match app_id {
         Ok(ApplicationIdentifier::RtnAllFrames) => true,
         Ok(_) => false,
         Err(_) => false,
-    } {
+    };
+
+    let (bind_result, version) = if !app_chk {
         (
             BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported),
             SleVersion::V5,
@@ -613,7 +674,7 @@ async fn process_bind(
         }
     };
 
-    // send a response
+    // Create a bind return PDU
     let credentials = new_credentials(&args.common_config, &mut args.rand);
     let pdu = SlePdu::SleBindReturn {
         performer_credentials: credentials,
@@ -621,11 +682,13 @@ async fn process_bind(
         result: bind_result,
     };
 
+    // Send it
     let _ = args
         .chan
         .send(SleMsg::BindReturn(pdu, args.interval, args.dead_factor))
         .await;
 
+    // Now, notify the application that the bind was successful
     {
         let lock = args.app_notifier.lock().unwrap();
         lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
@@ -633,6 +696,163 @@ async fn process_bind(
 
     Ok(())
 }
+
+async fn process_unbind(
+    args: &mut Args,
+    reason: &Integer
+) -> Result<(), String> {
+    let reason = UnbindReason::try_from(reason);
+
+    let reason = match reason {
+        Ok(reason) => reason,
+        Err(err) => {
+            warn!("Error converting UNBIND reason: {err}");
+            UnbindReason::Other
+        }
+    };
+
+    // Ok, BIND is ok, so process the request now
+    {
+        let mut lock = args.state.lock().unwrap();
+        lock.process_unbind(reason);
+    }
+
+    // Create a unbind return PDU
+    let credentials = new_credentials(&args.common_config, &mut args.rand);
+    let pdu = SlePdu::SleUnbindReturn {
+        responder_credentials: credentials,
+        result: (),
+    };
+
+    // Send it
+    let _ = args
+        .chan
+        .send(SleMsg::PDU(pdu))
+        .await;
+
+    // Now, notify the application that the bind was successful
+    {
+        let lock = args.app_notifier.lock().unwrap();
+        lock.unbind_succeeded(&args.raf_config.sii, reason);
+    }
+
+    Ok(())
+}
+
+async fn process_peer_abort(
+    args: &mut Args,
+    diagnostic: &PeerAbortDiagnostic
+) -> Result<(), String> {
+
+    warn!("Received PEER ABORT with diagnostic {diagnostic:?}");
+
+    {
+        let mut lock = args.state.lock().unwrap();
+        lock.peer_abort(diagnostic);
+    }
+
+    // Now, notify the application that the bind was successful
+    {
+        let lock = args.app_notifier.lock().unwrap();
+        lock.peer_abort(&args.raf_config.sii, diagnostic.clone());
+    }
+
+    Ok(())
+}
+
+async fn process_start(
+    args: &mut Args,
+    invoke_id: &InvokeId,
+    start_time: &ConditionalTime,
+    stop_time: &ConditionalTime,
+    requested_frame_quality: &Integer,
+) -> Result<(), String> {
+    // First perform all checks to see if the BIND request is legal
+
+    let frame_qual = RequestedFrameQuality::try_from(requested_frame_quality);
+    match frame_qual {
+        Ok(frame_qual) => {
+            Ok(())
+        }
+        Err(err) => Err(SpecificDiagnosticRafStart::UnableToComply),
+    };
+
+    // let (bind_result, version) = if !app_chk {
+    //     (
+    //         BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported),
+    //         SleVersion::V5,
+    //     )
+    // } else {
+    //     match SleVersion::try_from(*version_number as u8) {
+    //         Err(_) => (
+    //             BindResult::BindDiag(BindDiagnostic::VersionNotSupported),
+    //             SleVersion::V5,
+    //         ),
+    //         Ok(version) => {
+    //             match service_instance_identifier_to_string(service_instance_identifier) {
+    //                 Err(_) => (
+    //                     BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
+    //                     SleVersion::V5,
+    //                 ),
+    //                 Ok(sii) => {
+    //                     if sii != args.raf_config.sii {
+    //                         (
+    //                             BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
+    //                             SleVersion::V5,
+    //                         )
+    //                     } else {
+    //                         if responder_port_identifier.value != args.raf_config.responder_port {
+    //                             (
+    //                                 BindResult::BindDiag(
+    //                                     BindDiagnostic::SiNotAccessibleToThisInitiator,
+    //                                 ),
+    //                                 SleVersion::V5,
+    //                             )
+    //                         } else {
+    //                             // Ok, BIND is ok, so process the request now
+    //                             let mut lock = args.state.lock().unwrap();
+    //                             lock.process_bind(initiator_identifier, version);
+    //                             (BindResult::BindOK(version as u16), version)
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // };
+
+    // match bind_result {
+    //     BindResult::BindOK(_) => {
+    //         info!("BIND on {} successful", args.raf_config.sii);
+    //     }
+    //     BindResult::BindDiag(diag) => {
+    //         return Err(format!("BIND on {} failed: {diag:?}", args.raf_config.sii));
+    //     }
+    // };
+
+    // // Create a bind return PDU
+    // let credentials = new_credentials(&args.common_config, &mut args.rand);
+    // let pdu = SlePdu::SleBindReturn {
+    //     performer_credentials: credentials,
+    //     responder_identifier: VisibleString::new(args.raf_config.provider.clone()),
+    //     result: bind_result,
+    // };
+
+    // // Send it
+    // let _ = args
+    //     .chan
+    //     .send(SleMsg::BindReturn(pdu, args.interval, args.dead_factor))
+    //     .await;
+
+    // // Now, notify the application that the bind was successful
+    // {
+    //     let lock = args.app_notifier.lock().unwrap();
+    //     lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
+    // }
+
+    Ok(())
+}
+
 
 fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
     match config.auth_type {

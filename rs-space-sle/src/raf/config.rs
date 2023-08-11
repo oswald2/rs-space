@@ -41,11 +41,11 @@ pub struct RAFProviderConfig {
 impl Default for RAFProviderConfig {
     fn default() -> Self {
         RAFProviderConfig {
-            hostname: "localhost".to_string(),
+            hostname: "127.0.0.1".to_string(),
             port: 5100,
             server_init_time: 30,
             sii: "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1".to_string(),
-            provider: "RSPROV".to_string(),
+            provider: "PARAGONTT".to_string(),
             responder_port: "TMPORT".to_string(),
             sle_operation_timeout: 30,
         }

@@ -8,8 +8,9 @@ use rs_space_sle::sle::config::CommonConfig;
 use rs_space_sle::{
     provider::{app_interface::ProviderNotifier, config::ProviderConfig},
     raf::config::RAFProviderConfig,
-    types::sle::SleVersion,
+    types::sle::{SleVersion, PeerAbortDiagnostic},
 };
+use rs_space_sle::asn1::UnbindReason;
 
 //use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
@@ -32,6 +33,15 @@ impl ProviderNotifier for Notifier {
     fn bind_succeeded(&self, peer: &str, sii: &str, version: SleVersion) {
         info!("BIND SUCCEEDED from {peer} for {sii} for version {version}");
     }
+
+    fn unbind_succeeded(&self, sii: &str, reason: UnbindReason) {
+        info!("UNBIND SUCCEEDED for {sii} with reason {reason:?}");
+    }
+
+    fn peer_abort(&self, sii: &str, diagnostic: &PeerAbortDiagnostic) {
+        error!("PEER ABORT: for {sii} diagnostic: {diagnostic:?}");
+    }
+
 }
 
 pub async fn run_app(config: &ProviderConfig) -> Result<(), Error> {
@@ -80,7 +90,7 @@ pub async fn run_app(config: &ProviderConfig) -> Result<(), Error> {
 async fn run_service_instance(common_config: &CommonConfig, config: RAFProviderConfig) {
     let config2 = common_config.clone();
     
-    info!("Starting SLE instance {}", config.sii);
+    info!("Starting SLE instance {} on TCP port {} (SLE Port {})", config.sii, config.port, config.responder_port);
 
     let hdl = tokio::spawn(async move {
         let notifier = Arc::new(Mutex::new(Notifier::new()));

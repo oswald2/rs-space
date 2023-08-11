@@ -105,6 +105,20 @@ pub enum UnbindReason {
     Other = 127,
 }
 
+impl TryFrom<&rasn::types::Integer> for UnbindReason {
+    type Error = String;
+
+    fn try_from(value: &Integer) -> Result<Self, Self::Error> {
+        match value.to_i64() {
+            Some(0) => Ok(UnbindReason::End),
+            Some(1) => Ok(UnbindReason::Suspend),
+            Some(2) => Ok(UnbindReason::VersionNotSupported),
+            Some(127) => Ok(UnbindReason::Other),
+            x => Err(format!("Illegal UNBIND reason {x:?}")),
+        }
+    }
+}
+
 pub type VersionNumber = IntPosShort;
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]

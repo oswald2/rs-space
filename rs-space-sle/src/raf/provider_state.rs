@@ -1,6 +1,6 @@
 use rasn::types::{Utf8String, VisibleString};
 
-use crate::{asn1::AuthorityIdentifier, sle::config::CommonConfig, types::sle::SleVersion};
+use crate::{asn1::*, sle::config::*, types::sle::*};
 
 use super::state::RAFState;
 
@@ -20,12 +20,14 @@ impl InternalRAFProviderState {
             interval: config.tml.heartbeat,
             dead_factor: config.tml.dead_factor,
             user: VisibleString::new(Utf8String::from("")),
-            version: SleVersion::V3,
+            version: SleVersion::V5,
         }
     }
 
     pub fn reset(&mut self) {
-        self.state = RAFState::Unbound
+        self.user = VisibleString::new(Utf8String::from(""));
+        self.version = SleVersion::V5;
+        self.state = RAFState::Unbound;
     }
 
     pub fn set_heartbeat_values(&mut self, interval: u16, dead_factor: u16) {
@@ -41,5 +43,14 @@ impl InternalRAFProviderState {
         self.user = initiator.clone();
         self.version = version;
         self.state = RAFState::Bound;
+    }
+
+    pub fn process_unbind(&mut self, _reason: UnbindReason) {
+        self.reset();
+    }
+
+    pub fn peer_abort(&mut self, _diagnostic: &PeerAbortDiagnostic)
+    {
+        self.reset();
     }
 }
