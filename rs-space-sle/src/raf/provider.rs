@@ -60,6 +60,19 @@ pub struct RAFProvider {
     chan: Option<Sender<SleMsg>>,
 }
 
+struct Args {
+    common_config: CommonConfig,
+    raf_config: RAFProviderConfig,
+    state: InternalState,
+    cancel_token: CancellationToken,
+    app_notifier: Notifier,
+    chan: Sender<SleMsg>,
+    rand: StdRng,
+    rx: OwnedReadHalf,
+    interval: u16,
+    dead_factor: u16,
+}
+
 impl RAFProvider {
     pub fn new(
         common_config: &CommonConfig,
@@ -91,7 +104,7 @@ impl RAFProvider {
         let sender2 = sender.clone();
         self.chan = Some(sender);
 
-        let (mut rx, tx) = socket.into_split();
+        let (rx, tx) = socket.into_split();
 
         let cancel2 = self.cancel_token.clone();
         let cancel3 = self.cancel_token.clone();
@@ -106,36 +119,41 @@ impl RAFProvider {
 
         let notifier = self.app_notifier.clone();
 
-        let mut rand: StdRng = SeedableRng::from_entropy();
-
         let read_handle = tokio::spawn(async move {
+            let interval = config2.tml.heartbeat;
+            let dead_factor = config2.tml.dead_factor;
+            let cancel_clone = cancel2.clone();
+
+            let mut args = Args {
+                common_config: config2,
+                raf_config: raf_config2,
+                state: state2,
+                cancel_token: cancel2,
+                app_notifier: notifier,
+                chan: sender2,
+                rand: SeedableRng::from_entropy(),
+                rx,
+                interval,
+                dead_factor,
+            };
+
             // First, we expect a TML context message. If not, we bail out
-            match read_context_message(&config2, &mut rx, server_timeout).await {
+            match read_context_message(&mut args, server_timeout).await {
                 Err(err) => {
                     error!("Error reading SLE TML Context Message: {err}");
-                    cancel2.cancel();
+                    cancel_clone.cancel();
                 }
                 Ok((interval, dead_factor)) => {
-                    match read_pdus(
-                        &config2,
-                        &raf_config2,
-                        &mut rand,
-                        &sender2,
-                        notifier,
-                        cancel2.clone(),
-                        state2,
-                        &mut rx,
-                        interval,
-                        dead_factor,
-                    )
-                    .await
-                    {
+                    args.interval = interval;
+                    args.dead_factor = dead_factor;
+
+                    match read_pdus(&mut args).await {
                         Err(err) => {
                             error!("{err}");
-                            cancel2.cancel();
+                            cancel_clone.cancel();
                         }
                         Ok(_) => {
-                            cancel2.cancel();
+                            cancel_clone.cancel();
                         }
                     }
                 }
@@ -165,19 +183,18 @@ impl RAFProvider {
 }
 
 async fn read_context_message(
-    config: &CommonConfig,
-    rx: &mut OwnedReadHalf,
+    args: &mut Args,
     server_startup_interval: Duration,
 ) -> Result<(u16, u16), String> {
     select! {
-        res = TMLMessage::async_read(rx) => {
+        res = TMLMessage::async_read(&mut args.rx) => {
             match res {
                 Err(err) => { return Err(format!("Error reading TML Context Message: {err}")); }
                 Ok(msg) => {
                     debug!("Read TML message {msg:?}");
 
                     let (interval, dead_factor) = msg.check_context()?;
-                    let tml = &config.tml;
+                    let tml = &args.common_config.tml;
 
                     if interval < tml.min_heartbeat || interval > tml.max_heartbeat {
                         return Err(format!("Error: TML Context message interval ({interval}) is out of allowed range ([{}, {}])", tml.min_heartbeat, tml.max_heartbeat));
@@ -197,25 +214,14 @@ async fn read_context_message(
     };
 }
 
-async fn read_pdus(
-    config: &CommonConfig,
-    raf_config: &RAFProviderConfig,
-    rand: &mut StdRng,
-    sender: &Sender<SleMsg>,
-    notifier: Notifier,
-    cancel_token: CancellationToken,
-    state: InternalState,
-    rx: &mut OwnedReadHalf,
-    interval: u16,
-    dead_factor: u16,
-) -> Result<(), String> {
-    let timeout = Duration::from_secs(interval as u64 * dead_factor as u64);
+async fn read_pdus(args: &mut Args) -> Result<(), String> {
+    let timeout = Duration::from_secs(args.interval as u64 * args.dead_factor as u64);
 
     loop {
         select! {
             biased;
 
-            res = TMLMessage::async_read(rx) => {
+            res = TMLMessage::async_read(&mut args.rx) => {
                 match res {
                     Err(err) => {
                         return Err(format!("Error reading SLE TML Message: {err}"));
@@ -226,7 +232,7 @@ async fn read_pdus(
                         }
                         else
                         {
-                            parse_sle_message(config, raf_config, rand, interval, dead_factor, sender, notifier.clone(), cancel_token.clone(), state.clone(), &msg).await;
+                            parse_sle_message(args, &msg).await;
                         }
                     }
                 }
@@ -234,36 +240,25 @@ async fn read_pdus(
             _ = tokio::time::sleep(timeout) => {
                 return Err(format!("Timeout waiting for heartbeat message"));
             }
-            _ = cancel_token.cancelled() => {
-                debug!("RAF provider for {} read loop has been cancelled", raf_config.sii);
+            _ = args.cancel_token.cancelled() => {
+                debug!("RAF provider for {} read loop has been cancelled", args.raf_config.sii);
                 return Ok(());
             }
         };
     }
 }
 
-async fn parse_sle_message(
-    config: &CommonConfig,
-    raf_config: &RAFProviderConfig,
-    rand: &mut StdRng,
-    interval: u16, 
-    dead_factor: u16,
-    sender: &Sender<SleMsg>,
-    notifier: Notifier,
-    cancel_token: CancellationToken,
-    state: InternalState,
-    msg: &TMLMessage,
-) {
+async fn parse_sle_message(args: &mut Args, msg: &TMLMessage) {
     let res: Result<SlePdu, _> = rasn::der::decode(&msg.data[..]);
 
     match res {
         Ok(SlePdu::SlePeerAbort { diagnostic: diag }) => {
             warn!("Received Peer Abort with diagnostic: {:?}", diag);
-            cancel_token.cancel();
+            args.cancel_token.cancel();
         }
         Ok(pdu) => {
             // then continue processing
-            process_sle_pdu(config, raf_config, rand, &pdu, interval, dead_factor, state, sender, notifier).await;
+            process_sle_pdu(args, &pdu).await;
         }
         Err(err) => {
             error!("Error on decoding SLE PDU: {err}");
@@ -428,17 +423,7 @@ fn check_peer(
     }
 }
 
-async fn process_sle_pdu(
-    common_config: &CommonConfig,
-    raf_config: &RAFProviderConfig,
-    rand: &mut StdRng,
-    pdu: &SlePdu,
-    interval: u16,
-    dead_factor: u16,
-    state: InternalState,
-    sender: &Sender<SleMsg>,
-    notifier: Notifier,
-) {
+async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
     match pdu {
         SlePdu::SleBindInvocation {
             invoker_credentials: _,
@@ -449,37 +434,30 @@ async fn process_sle_pdu(
             service_instance_identifier,
         } => {
             // check authentication
-            if !check_authentication(common_config, state.clone(), &pdu) {
+            if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
                 error!("SLE PDU failed authentication");
 
-                let credentials = new_credentials(common_config, rand);
+                let credentials = new_credentials(&args.common_config, &mut args.rand);
 
                 // send back a negative acknowledge
                 let ret = SlePdu::SleBindReturn {
                     performer_credentials: credentials,
-                    responder_identifier: VisibleString::new(raf_config.provider.clone()),
+                    responder_identifier: VisibleString::new(args.raf_config.provider.clone()),
                     result: BindResult::BindDiag(BindDiagnostic::AccessDenied),
                 };
 
-                let _ = sender.send(SleMsg::PDU(ret)).await;
+                let _ = args.chan.send(SleMsg::PDU(ret)).await;
                 return;
             }
 
             // First: perform checks
             if let Err(err) = process_bind(
-                common_config,
-                raf_config,
-                rand,
-                sender,
-                state.clone(),
-                notifier,
+                args,
                 initiator_identifier,
                 responder_port_identifier,
                 service_type,
                 version_number,
                 service_instance_identifier,
-                interval, 
-                dead_factor
             )
             .await
             {
@@ -555,72 +533,87 @@ async fn send_sle_msg(pdu: SlePdu, tx: &mut OwnedWriteHalf) -> Result<(), String
 }
 
 async fn process_bind(
-    common_config: &CommonConfig,
-    raf_config: &RAFProviderConfig,
-    rand: &mut StdRng,
-    sender: &Sender<SleMsg>,
-    state: InternalState,
-    notifier: Notifier,
+    args: &mut Args,
     initiator_identifier: &AuthorityIdentifier,
     responder_port_identifier: &PortId,
     service_type: &Integer,
     version_number: &VersionNumber,
     service_instance_identifier: &ServiceInstanceIdentifier,
-    interval: u16,
-    dead_factor: u16
 ) -> Result<(), String> {
     // First perform all checks to see if the BIND request is legal
-    let (bind_result, version) = 
-        if match ApplicationIdentifier::try_from(service_type) {
-            Ok(ApplicationIdentifier::RtnAllFrames) => true,
-            Ok(_) => false,
-            Err(_) => false
-        } { (BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported), SleVersion::V5) }
-        else {
-            match SleVersion::try_from(*version_number as u8) {
-                Err(_) => (BindResult::BindDiag(BindDiagnostic::VersionNotSupported), SleVersion::V5), 
-                Ok(version) => {
-                    match service_instance_identifier_to_string(service_instance_identifier) {
-                        Err(_) => (BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance), SleVersion::V5),
-                        Ok(sii) => {
-                            if sii != raf_config.sii {
-                                (BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance), SleVersion::V5)
+    let (bind_result, version) = if match ApplicationIdentifier::try_from(service_type) {
+        Ok(ApplicationIdentifier::RtnAllFrames) => true,
+        Ok(_) => false,
+        Err(_) => false,
+    } {
+        (
+            BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported),
+            SleVersion::V5,
+        )
+    } else {
+        match SleVersion::try_from(*version_number as u8) {
+            Err(_) => (
+                BindResult::BindDiag(BindDiagnostic::VersionNotSupported),
+                SleVersion::V5,
+            ),
+            Ok(version) => {
+                match service_instance_identifier_to_string(service_instance_identifier) {
+                    Err(_) => (
+                        BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
+                        SleVersion::V5,
+                    ),
+                    Ok(sii) => {
+                        if sii != args.raf_config.sii {
+                            (
+                                BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
+                                SleVersion::V5,
+                            )
+                        } else {
+                            if responder_port_identifier.value != args.raf_config.responder_port {
+                                (
+                                    BindResult::BindDiag(
+                                        BindDiagnostic::SiNotAccessibleToThisInitiator,
+                                    ),
+                                    SleVersion::V5,
+                                )
                             } else {
-                                if responder_port_identifier.value != raf_config.responder_port {
-                                    (BindResult::BindDiag(BindDiagnostic::SiNotAccessibleToThisInitiator), SleVersion::V5)
-                                } else {
-                                    // Ok, BIND is ok, so process the request now
-                                    let mut lock = state.lock().unwrap();
-                                    lock.process_bind(initiator_identifier, version);
-                                    (BindResult::BindOK(version as u16), version)
-                                }
+                                // Ok, BIND is ok, so process the request now
+                                let mut lock = args.state.lock().unwrap();
+                                lock.process_bind(initiator_identifier, version);
+                                (BindResult::BindOK(version as u16), version)
                             }
                         }
                     }
                 }
             }
-        };
+        }
+    };
 
     match bind_result {
         BindResult::BindOK(_) => {
-            info!("BIND on {} successful", raf_config.sii);
+            info!("BIND on {} successful", args.raf_config.sii);
         }
         BindResult::BindDiag(diag) => {
-            return Err(format!("BIND on {} failed: {diag:?}", raf_config.sii));
+            return Err(format!("BIND on {} failed: {diag:?}", args.raf_config.sii));
         }
     };
-    
-    // send a response
-    let credentials = new_credentials(common_config, rand);
-    let pdu = SlePdu::SleBindReturn { performer_credentials: credentials, 
-            responder_identifier: VisibleString::new(raf_config.provider.clone()), 
-            result: bind_result };
 
-    let _ = sender.send(SleMsg::BindReturn(pdu, interval, dead_factor)).await;
+    // send a response
+    let credentials = new_credentials(&args.common_config, &mut args.rand);
+    let pdu = SlePdu::SleBindReturn {
+        performer_credentials: credentials,
+        responder_identifier: VisibleString::new(args.raf_config.provider.clone()),
+        result: bind_result,
+    };
+
+    let _ = args
+        .chan
+        .send(SleMsg::BindReturn(pdu, args.interval, args.dead_factor))
+        .await;
 
     {
-        let lock = notifier.lock().unwrap();
-        lock.bind_succeeded(&initiator_identifier.value, &raf_config.sii, version);
+        let lock = args.app_notifier.lock().unwrap();
+        lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
     }
 
     Ok(())
