@@ -38,7 +38,7 @@ pub mod tml {
 /// as the specific configs and ASN1 definitions specific for this service.
 pub mod raf {
     pub mod asn1;
-    pub mod client;
+    pub mod user;
     pub mod config;
     pub mod provider;
     pub mod provider_state;

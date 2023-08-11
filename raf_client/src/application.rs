@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use rs_space_sle::asn1::UnbindReason;
 use rs_space_sle::raf::asn1::{RequestedFrameQuality, SleTMFrame};
-use rs_space_sle::raf::client::RAFUser;
+use rs_space_sle::raf::user::RAFUser;
 use rs_space_sle::user::config::UserConfig;
 use tokio::io::Error;
 
