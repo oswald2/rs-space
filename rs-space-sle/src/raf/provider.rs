@@ -100,12 +100,16 @@ impl RAFProvider {
             self.raf_config.sii, peer
         );
 
+        // a mpsc channel to send command messags to the writer task.
         let (sender, mut receiver) = channel::<SleMsg>(QUEUE_SIZE);
         let sender2 = sender.clone();
         self.chan = Some(sender);
 
+        // We need a writer and a reader task, so we split the socket into a
+        // read and write half
         let (rx, tx) = socket.into_split();
 
+        // some clones to pass on to the two tasks
         let cancel2 = self.cancel_token.clone();
         let cancel3 = self.cancel_token.clone();
 
@@ -114,11 +118,18 @@ impl RAFProvider {
         let raf_config2 = self.raf_config.clone();
         let raf_config3 = self.raf_config.clone();
 
-        let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
         let state2 = self.state.clone();
 
         let notifier = self.app_notifier.clone();
 
+        // The server timeout is for waiting for the TML Context message to be received
+        let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
+
+        // The first task. This task reads from the socket, parses the SLE PDUs,
+        // authenticates them (if configured) and passes them on forwards to the
+        // application. Also, PDUs for the state machine are processed, forwarded
+        // to the state and a subsequent return operation is generated and passed
+        // to the writer task
         let read_handle = tokio::spawn(async move {
             let interval = config2.tml.heartbeat;
             let dead_factor = config2.tml.dead_factor;
@@ -160,6 +171,9 @@ impl RAFProvider {
             }
         });
 
+        // The writer task. This listens on the mpsc channel for messages and reacts to them.
+        // The primary task is of course getting SLE PDUs via this channel, add 
+        // authentication info if configured, encode them and send them to the socket.
         let write_handle = tokio::spawn(async move {
             match write_task(&config3, &raf_config3, tx, &mut receiver, cancel3.clone()).await {
                 Err(err) => {
@@ -170,7 +184,8 @@ impl RAFProvider {
             }
         });
 
-        // we keep running, so we await on the handles of the tasks
+        // we only want to return, when the tasks have finished. So we await the handles.
+        // Unfortunately, we have no scoped tasks for async.
         let _ = read_handle.await;
         let _ = write_handle.await;
 

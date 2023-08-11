@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use rs_space_sle::asn1::UnbindReason;
 use rs_space_sle::raf::asn1::{RequestedFrameQuality, SleTMFrame};
-use rs_space_sle::raf::client::RAFClient;
+use rs_space_sle::raf::client::RAFUser;
 use rs_space_sle::user::config::UserConfig;
 use tokio::io::Error;
 
@@ -21,7 +21,7 @@ pub async fn run_app(config: &UserConfig) -> Result<(), Error> {
         let address = format!("{}:{}", raf_config.hostname, raf_config.port);
         info!("Connecting to {}...", address);
 
-        let mut raf = RAFClient::new(&config.common, &raf_config, frame_callback);
+        let mut raf = RAFUser::new(&config.common, &raf_config, frame_callback);
 
         //std::thread::sleep(std::time::Duration::from_secs(2));
 

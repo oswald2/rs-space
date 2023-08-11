@@ -49,7 +49,7 @@ pub enum OpRet {
 type InternalTask = Option<JoinHandle<()>>;
 
 /// The RAF client itself.
-pub struct RAFClient {
+pub struct RAFUser {
     common_config: CommonConfig,
     raf_config: RAFConfig,
     chan: Option<Sender<SleMsg>>,
@@ -67,18 +67,18 @@ pub struct RAFClient {
 
 type InternalState = Arc<Mutex<InternalRAFState>>;
 
-impl RAFClient {
+impl RAFUser {
     /// Create a new instance of a RAF client, with the given configurations and the given callback for
     /// TM Transfer Frames
     pub fn new(
         common_config: &CommonConfig,
         raf_config: &RAFConfig,
         frame_callback: FrameCallback,
-    ) -> RAFClient {
+    ) -> RAFUser {
         let cancellation = CancellationToken::new();
         let raf_state = Arc::new(Mutex::new(InternalRAFState::new(frame_callback)));
 
-        let client = RAFClient {
+        let client = RAFUser {
             common_config: common_config.clone(),
             raf_config: raf_config.clone(),
             chan: None,

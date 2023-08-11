@@ -10,14 +10,19 @@ use crate::sle::config::HashToUse;
 
 use super::sle::{to_ccsds_time, TimeCCSDS};
 
+/// The ISP1 Credentials to be used in the authentication of SLE PDUs. 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 pub struct ISP1Credentials {
+    /// The time in CCSDS CDS-8 format
     pub time: TimeCCSDS,
+    /// A random number 
     pub random: i32,
+    /// The procted. A hashed octet string to be verified
     pub the_protected: OctetString,
 }
 
 impl ISP1Credentials {
+    /// Create a new ISP1 Credentials structure
     pub fn new(
         hash_to_use: HashToUse,
         time: &rs_space_core::time::Time,
@@ -39,6 +44,12 @@ impl ISP1Credentials {
     }
 }
 
+/// The HashInput. This struct is automatically created for the ISP1 credentials.
+/// This struct contains again the time, the random value, the user name and the 
+/// password. This structure is then ASN1 encoded and put through a hash function.
+/// 
+/// Older SLE variants use a SHA1, while the current versions use a SHA256 hash. 
+/// This can be configured in the [CommonConfig] configuration.
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct HashInput {
     time: TimeCCSDS,
@@ -48,6 +59,7 @@ pub struct HashInput {
 }
 
 impl HashInput {
+    /// Create the [HashInput] from the given values
     pub fn new(time: &TimeCCSDS, random: i32, user: &VisibleString, password: Bytes) -> HashInput {
         HashInput {
             time: time.clone(),
@@ -57,6 +69,9 @@ impl HashInput {
         }
     }
 
+    /// Actually calculate the hash value of this structure. Encodes the structure into ASN1 
+    /// and then calculates the hash value with the hash algorithm given as the argument to
+    /// this function
     pub fn the_protected(&self, mode: HashToUse) -> Bytes {
         let out = rasn::der::encode(self).unwrap();
         match mode {
@@ -72,6 +87,8 @@ impl HashInput {
     }
 }
 
+/// Checks the authentication of the given ISP1 credentials agains the given user
+/// name and password. The `authority_identifier` is the user name. 
 pub fn check_credentials(
     credentials: &ISP1Credentials,
     authority_identifier: &VisibleString,
