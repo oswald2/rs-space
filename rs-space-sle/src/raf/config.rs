@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::asn1::DeliveryModeEnum;
 use crate::types::sle::SleVersion;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +34,7 @@ pub struct RAFProviderConfig {
     pub port: u16,
     pub server_init_time: u16,
     pub sii: String,
+    pub mode: DeliveryModeEnum,
     pub provider: String,
     pub responder_port: String,
     pub sle_operation_timeout: u16,
@@ -45,6 +47,7 @@ impl Default for RAFProviderConfig {
             port: 5100,
             server_init_time: 30,
             sii: "sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1".to_string(),
+            mode: DeliveryModeEnum::RtnCompleteOnline,
             provider: "PARAGONTT".to_string(),
             responder_port: "TMPORT".to_string(),
             sle_operation_timeout: 30,

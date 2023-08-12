@@ -136,3 +136,15 @@ DEBUG - SLE TML heartbeat received
 INFO - UNBIND SUCCEEDED for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 with reason End
 ERROR - Error reading SLE TML Message: early eof
 DEBUG - RAF provider for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 has been cancelled (write task)
+INFO - RAF Provider started
+INFO - Starting SLE instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 on TCP port 5100 (SLE Port TMPORT)
+INFO - Connection on RAF instance sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 from 127.0.0.1:55030
+DEBUG - Read TML message TMLMessage { msg_type: ContextMessage, length: 12, data: [73, 83, 80, 49, 0, 0, 0, 1, 0, 30, 0, 5] }
+INFO - BIND on sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 successful
+INFO - BIND SUCCEEDED from SLETT for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 for version 4
+DEBUG - SLE TML heartbeat received
+INFO - RAF START SUCCEEDED for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - RAF STOP SUCCEEDED for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1
+INFO - UNBIND SUCCEEDED for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 with reason End
+ERROR - Error reading SLE TML Message: early eof
+DEBUG - RAF provider for sagr=3.spack=facility-PASS1.rsl-fg=1.raf=onlc1 has been cancelled (write task)

@@ -2,6 +2,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::time::{Duration, SystemTime};
+use std::cmp::Ordering;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum TimeEncoding {
@@ -23,6 +24,20 @@ pub struct Time {
     time: Duration,
     encoding: TimeEncoding,
 }
+
+impl PartialEq for Time {
+    fn eq(&self, other: &Self) -> bool {
+        self.time == other.time
+    }
+}
+
+
+impl PartialOrd for Time {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.time.partial_cmp(&other.time)
+    }
+}
+
 
 impl Time {
     pub fn new(enc: TimeEncoding) -> Time {

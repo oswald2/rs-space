@@ -9,6 +9,8 @@ use crate::types::sle::{
 };
 
 use crate::raf::asn1::{RafStartReturnResult, RafTransferBuffer};
+use serde::{Deserialize, Serialize};
+
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -23,6 +25,32 @@ pub type SlduStatusNotification = i64;
 
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct SpaceLinkDataUnit(Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DeliveryModeEnum {
+    RtnTimelyOnline = 0,
+    RtnCompleteOnline = 1,
+    RtnOffline = 2,
+    FwdOnline = 3,
+    FwdOffline = 4,
+}
+
+impl TryFrom<i64> for DeliveryModeEnum {
+    type Error = String;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(DeliveryModeEnum::RtnTimelyOnline),
+            1 => Ok(DeliveryModeEnum::RtnCompleteOnline),
+            2 => Ok(DeliveryModeEnum::RtnOffline),
+            3 => Ok(DeliveryModeEnum::FwdOnline),
+            4 => Ok(DeliveryModeEnum::FwdOffline),
+            x => Err(format!("Illegal value for delivery mode {x}")),
+        }
+    }
+}
+
+
 
 // ASN1 bind types
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
@@ -248,7 +276,7 @@ impl SlePdu {
 //     pub raf_parameter: RafParameterName,
 // }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Copy, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum BindResult {
     #[rasn(tag(0))]
@@ -257,7 +285,7 @@ pub enum BindResult {
     BindDiag(BindDiagnostic),
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Copy, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum SleResult {
     #[rasn(tag(0))]

@@ -6,7 +6,7 @@ use log::{info, error};
 use rs_space_sle::raf::provider::RAFProvider;
 use rs_space_sle::sle::config::CommonConfig;
 use rs_space_sle::{
-    provider::{app_interface::ProviderNotifier, config::ProviderConfig},
+    provider::{raf_interface::ProviderNotifier, config::ProviderConfig},
     raf::config::RAFProviderConfig,
     types::sle::{SleVersion, PeerAbortDiagnostic},
 };
@@ -42,6 +42,13 @@ impl ProviderNotifier for Notifier {
         error!("PEER ABORT: for {sii} diagnostic: {diagnostic:?}");
     }
 
+    fn start_succeeded(&self, sii: &str) {
+        info!("RAF START SUCCEEDED for {sii}");
+    }
+
+    fn stop_succeeded(&self, sii: &str) {
+        info!("RAF STOP SUCCEEDED for {sii}");
+    }
 }
 
 pub async fn run_app(config: &ProviderConfig) -> Result<(), Error> {

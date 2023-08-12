@@ -19,8 +19,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     asn1::*,
+    provider::raf_interface::ProviderNotifier,
     raf::asn1::*,
-    provider::app_interface::ProviderNotifier,
     sle::config::{CommonConfig, SleAuthType},
     tml::message::TMLMessage,
     types::{
@@ -477,7 +477,7 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
         SlePdu::SleUnbindInvocation {
             invoker_credentials: _,
             unbind_reason,
-            } => {
+        } => {
             // check authentication
             if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
                 warn!("SLE PDU UNBIND failed authentication, ignoring PDU...");
@@ -486,12 +486,7 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
             }
 
             // Processing of the UNBIND
-            if let Err(err) = process_unbind(
-                args,
-                unbind_reason,
-            )
-            .await
-            {
+            if let Err(err) = process_unbind(args, unbind_reason).await {
                 error!("Error processing UNBIND: {err}");
             }
         }
@@ -515,7 +510,9 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
                 let ret = SlePdu::SleRafStartReturn {
                     performer_credentials: credentials,
                     invoke_id: *invoke_id,
-                    result: RafStartReturnResult::NegativeResult(DiagnosticRafStart::Common(Diagnostics::OtherReason)),
+                    result: RafStartReturnResult::NegativeResult(DiagnosticRafStart::Common(
+                        Diagnostics::OtherReason,
+                    )),
                 };
 
                 let _ = args.chan.send(SleMsg::PDU(ret)).await;
@@ -534,7 +531,36 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
             {
                 error!("Error processing BIND: {err}");
             }
-           
+        }
+        SlePdu::SleRafStopInvocation {
+            invoker_credentials: _,
+            invoke_id,
+        } => {
+            // check authentication
+            if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
+                error!("RAF STOP PDU failed authentication");
+
+                let credentials = new_credentials(&args.common_config, &mut args.rand);
+
+                // send back a negative acknowledge
+                let ret = SlePdu::SleAcknowledgement {
+                    credentials: credentials,
+                    invoke_id: *invoke_id,
+                    result: SleResult::NegativeResult(Diagnostics::OtherReason),
+                };
+
+                let _ = args.chan.send(SleMsg::PDU(ret)).await;
+                return;
+            }
+
+            // Now do the processing of the BIND
+            if let Err(err) = process_stop(
+                args, *invoke_id
+            )
+            .await
+            {
+                error!("Error processing STOP: {err}");
+            }
         }
         pdu => {
             info!("Not yet implemented: processing for PDU: {:?}", pdu);
@@ -655,8 +681,13 @@ async fn process_bind(
                             } else {
                                 // Ok, BIND is ok, so process the request now
                                 let mut lock = args.state.lock().unwrap();
-                                lock.process_bind(initiator_identifier, version);
-                                (BindResult::BindOK(version as u16), version)
+                                match lock.process_bind(initiator_identifier, version) {
+                                    Ok(()) => (BindResult::BindOK(version as u16), version), 
+                                    Err(err) => {
+                                        error!("{err}");
+                                        (BindResult::BindDiag(BindDiagnostic::AlreadyBound), SleVersion::V5)
+                                    }
+                                }
                             }
                         }
                     }
@@ -697,10 +728,7 @@ async fn process_bind(
     Ok(())
 }
 
-async fn process_unbind(
-    args: &mut Args,
-    reason: &Integer
-) -> Result<(), String> {
+async fn process_unbind(args: &mut Args, reason: &Integer) -> Result<(), String> {
     let reason = UnbindReason::try_from(reason);
 
     let reason = match reason {
@@ -714,7 +742,7 @@ async fn process_unbind(
     // Ok, BIND is ok, so process the request now
     {
         let mut lock = args.state.lock().unwrap();
-        lock.process_unbind(reason);
+        let _ = lock.process_unbind(reason);
     }
 
     // Create a unbind return PDU
@@ -725,10 +753,7 @@ async fn process_unbind(
     };
 
     // Send it
-    let _ = args
-        .chan
-        .send(SleMsg::PDU(pdu))
-        .await;
+    let _ = args.chan.send(SleMsg::PDU(pdu)).await;
 
     // Now, notify the application that the bind was successful
     {
@@ -741,9 +766,8 @@ async fn process_unbind(
 
 async fn process_peer_abort(
     args: &mut Args,
-    diagnostic: &PeerAbortDiagnostic
+    diagnostic: &PeerAbortDiagnostic,
 ) -> Result<(), String> {
-
     warn!("Received PEER ABORT with diagnostic {diagnostic:?}");
 
     {
@@ -754,7 +778,7 @@ async fn process_peer_abort(
     // Now, notify the application that the bind was successful
     {
         let lock = args.app_notifier.lock().unwrap();
-        lock.peer_abort(&args.raf_config.sii, diagnostic.clone());
+        lock.peer_abort(&args.raf_config.sii, diagnostic);
     }
 
     Ok(())
@@ -770,89 +794,189 @@ async fn process_start(
     // First perform all checks to see if the BIND request is legal
 
     let frame_qual = RequestedFrameQuality::try_from(requested_frame_quality);
-    match frame_qual {
+    let (diag, frame_qual, start, stop) = match frame_qual {
         Ok(frame_qual) => {
-            Ok(())
+            // check the start time, must be present in OFFLINE mode
+            if args.raf_config.mode == DeliveryModeEnum::RtnOffline && start_time.is_null() {
+                (
+                    RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
+                        SpecificDiagnosticRafStart::MissingTimeValue,
+                    )),
+                    frame_qual,
+                    None,
+                    None,
+                )
+            }
+            // also check that stop time is present in OFFLINE mode
+            else if args.raf_config.mode == DeliveryModeEnum::RtnOffline && stop_time.is_null() {
+                (
+                    RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
+                        SpecificDiagnosticRafStart::MissingTimeValue,
+                    )),
+                    frame_qual,
+                    None,
+                    None,
+                )
+            } else {
+                // check, if we can convert the start time correctly
+                match from_conditional_ccsds_time(start_time) {
+                    Err(err) => {
+                        error!("Could not convert start time from RAF START: {err}");
+                        (
+                            RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
+                                SpecificDiagnosticRafStart::InvalidStartTime,
+                            )),
+                            frame_qual,
+                            None,
+                            None,
+                        )
+                    }
+                    Ok(start) => {
+                        // check, if we can convert the stop time correctly
+                        match from_conditional_ccsds_time(stop_time) {
+                            Err(err) => {
+                                error!("Could not convert stop time from RAF START: {err}");
+                                (
+                                    RafStartReturnResult::NegativeResult(
+                                        DiagnosticRafStart::Specific(
+                                            SpecificDiagnosticRafStart::InvalidStopTime,
+                                        ),
+                                    ),
+                                    frame_qual,
+                                    None,
+                                    None,
+                                )
+                            }
+                            Ok(stop) => {
+                                // Check if the times are in order
+                                match (start.clone(), stop.clone()) {
+                                    (Some(start), Some(stop)) => {
+                                        if start > stop {
+                                            error!(
+                                                "RAF START: start time is greater than stop time"
+                                            );
+                                            (RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(SpecificDiagnosticRafStart::InvalidStartTime)), frame_qual, None, None)
+                                        } else {
+                                            // we are good
+                                            (
+                                                RafStartReturnResult::PositiveResult,
+                                                frame_qual,
+                                                Some(start),
+                                                Some(stop),
+                                            )
+                                        }
+                                    }
+                                    _ => (
+                                        RafStartReturnResult::PositiveResult,
+                                        frame_qual,
+                                        start,
+                                        stop,
+                                    ),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-        Err(err) => Err(SpecificDiagnosticRafStart::UnableToComply),
+        Err(err) => {
+            error!("Error parsing Requested Frame Quality from RAF START: {err}");
+            (
+                RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
+                    SpecificDiagnosticRafStart::UnableToComply,
+                )),
+                RequestedFrameQuality::AllFrames,
+                None,
+                None,
+            )
+        }
     };
 
-    // let (bind_result, version) = if !app_chk {
-    //     (
-    //         BindResult::BindDiag(BindDiagnostic::ServiceTypeNotSupported),
-    //         SleVersion::V5,
-    //     )
-    // } else {
-    //     match SleVersion::try_from(*version_number as u8) {
-    //         Err(_) => (
-    //             BindResult::BindDiag(BindDiagnostic::VersionNotSupported),
-    //             SleVersion::V5,
-    //         ),
-    //         Ok(version) => {
-    //             match service_instance_identifier_to_string(service_instance_identifier) {
-    //                 Err(_) => (
-    //                     BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
-    //                     SleVersion::V5,
-    //                 ),
-    //                 Ok(sii) => {
-    //                     if sii != args.raf_config.sii {
-    //                         (
-    //                             BindResult::BindDiag(BindDiagnostic::NoSuchServiceInstance),
-    //                             SleVersion::V5,
-    //                         )
-    //                     } else {
-    //                         if responder_port_identifier.value != args.raf_config.responder_port {
-    //                             (
-    //                                 BindResult::BindDiag(
-    //                                     BindDiagnostic::SiNotAccessibleToThisInitiator,
-    //                                 ),
-    //                                 SleVersion::V5,
-    //                             )
-    //                         } else {
-    //                             // Ok, BIND is ok, so process the request now
-    //                             let mut lock = args.state.lock().unwrap();
-    //                             lock.process_bind(initiator_identifier, version);
-    //                             (BindResult::BindOK(version as u16), version)
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // };
+    let credentials = new_credentials(&args.common_config, &mut args.rand);
+    match &diag {
+        RafStartReturnResult::PositiveResult => {
+            // Ok, START is ok, so process the request now
+            let diag = {
+                let mut lock = args.state.lock().unwrap();
+                match lock.process_start(start, stop, frame_qual) {
+                    Ok(()) => RafStartReturnResult::PositiveResult, 
+                    Err(err) => {
+                        error!("{err}");
+                        RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
+                            SpecificDiagnosticRafStart::UnableToComply,
+                        ))
+                    }
+                }
+            };
 
-    // match bind_result {
-    //     BindResult::BindOK(_) => {
-    //         info!("BIND on {} successful", args.raf_config.sii);
-    //     }
-    //     BindResult::BindDiag(diag) => {
-    //         return Err(format!("BIND on {} failed: {diag:?}", args.raf_config.sii));
-    //     }
-    // };
+            // send a return
+            let pdu = SlePdu::SleRafStartReturn {
+                performer_credentials: credentials,
+                invoke_id: *invoke_id,
+                result: diag,
+            };
 
-    // // Create a bind return PDU
-    // let credentials = new_credentials(&args.common_config, &mut args.rand);
-    // let pdu = SlePdu::SleBindReturn {
-    //     performer_credentials: credentials,
-    //     responder_identifier: VisibleString::new(args.raf_config.provider.clone()),
-    //     result: bind_result,
-    // };
+            // Send it
+            let _ = args.chan.send(SleMsg::PDU(pdu)).await;
 
-    // // Send it
-    // let _ = args
-    //     .chan
-    //     .send(SleMsg::BindReturn(pdu, args.interval, args.dead_factor))
-    //     .await;
-
-    // // Now, notify the application that the bind was successful
-    // {
-    //     let lock = args.app_notifier.lock().unwrap();
-    //     lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
-    // }
-
+            if let RafStartReturnResult::PositiveResult = diag {
+                // Now, notify the application that the bind was successful
+                {
+                    let lock = args.app_notifier.lock().unwrap();
+                    lock.start_succeeded(&args.raf_config.sii);
+                }
+            }
+        }
+        RafStartReturnResult::NegativeResult(_) => {
+            // send a return
+            let pdu = SlePdu::SleRafStartReturn {
+                performer_credentials: credentials,
+                invoke_id: *invoke_id,
+                result: diag,
+            };
+            // Send it
+            let _ = args.chan.send(SleMsg::PDU(pdu)).await;
+        }
+    }
     Ok(())
 }
 
+
+async fn process_stop(args: &mut Args, invoke_id: u16) -> Result<(), String> {
+
+    // Ok, BIND is ok, so process the request now
+    let diag = {
+        {
+            let mut lock = args.state.lock().unwrap();
+            match lock.process_stop() {
+                Err(err) => { 
+                    error!("{err}");
+                    SleResult::NegativeResult(Diagnostics::OtherReason)
+                }
+                Ok(()) => SleResult::PositiveResult
+            }
+        }
+    };
+
+    // Create a SLE Ack PDU
+    let credentials = new_credentials(&args.common_config, &mut args.rand);
+    let pdu = SlePdu::SleAcknowledgement {
+        credentials: credentials,
+        invoke_id: invoke_id,
+        result: diag,
+    };
+
+    // Send it
+    let _ = args.chan.send(SleMsg::PDU(pdu)).await;
+
+
+    if let SleResult::PositiveResult = diag {
+        let lock = args.app_notifier.lock().unwrap();
+        lock.stop_succeeded(&args.raf_config.sii);
+    }
+
+    Ok(())
+}
 
 fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
     match config.auth_type {

@@ -22,7 +22,7 @@
 
 /// General types to be used
 pub mod types {
-    /// AUL is the authentication layer of the SLE messages and provides types for handling the 
+    /// AUL is the authentication layer of the SLE messages and provides types for handling the
     /// authentication
     pub mod aul;
     /// Contains general types and functions for ASN1 functionality
@@ -38,11 +38,11 @@ pub mod tml {
 /// as the specific configs and ASN1 definitions specific for this service.
 pub mod raf {
     pub mod asn1;
-    pub mod user;
     pub mod config;
     pub mod provider;
     pub mod provider_state;
     pub mod state;
+    pub mod user;
 }
 /// This module contains the general SLE configuration values.
 pub mod sle {
@@ -56,6 +56,6 @@ pub mod user {
 }
 /// Contains the configuration and callback interfaces for the SLE Provider.
 pub mod provider {
-    pub mod app_interface;
     pub mod config;
+    pub mod raf_interface;
 }

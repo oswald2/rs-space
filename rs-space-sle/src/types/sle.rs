@@ -141,6 +141,33 @@ pub fn to_conditional_ccsds_time(
     }
 }
 
+pub fn from_conditional_ccsds_time(
+    time: &ConditionalTime,
+) -> Result<Option<rs_space_core::time::Time>, String> {
+    match time {
+        ConditionalTime::NoTime => Ok(None),
+        ConditionalTime::HasTime(t) => match t {
+            Time::CcsdsFormat(t) => {
+                let t1 = from_ccsds_time(t)?;
+                Ok(Some(t1))
+            }
+            Time::CcsdsPicoFormat(t) => {
+                let t1 = from_ccsds_time_pico(t)?;
+                Ok(Some(t1))
+            }
+        },
+    }
+}
+
+impl ConditionalTime {
+    pub fn is_null(&self) -> bool {
+        match self {
+            ConditionalTime::NoTime => true,
+            _ => false,
+        }
+    }
+}
+
 impl Encode for ConditionalTime {
     fn encode_with_tag<E: rasn::Encoder>(
         &self,
@@ -436,7 +463,7 @@ fn tcva_parser(input: &str) -> IResult<&str, &ConstOid> {
     Ok((input, &TCVA))
 }
 
-#[derive(AsnType, Debug, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Copy, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum PeerAbortDiagnostic {
     #[rasn(tag(0))]
@@ -461,7 +488,7 @@ pub enum PeerAbortDiagnostic {
     OtherReason,
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Copy, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum Diagnostics {
     #[rasn(tag(100))]

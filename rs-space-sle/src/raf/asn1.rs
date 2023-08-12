@@ -29,7 +29,7 @@ impl TryFrom<&Integer> for RequestedFrameQuality {
     }
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum DiagnosticRafStart {
     #[rasn(tag(0))]
@@ -38,7 +38,7 @@ pub enum DiagnosticRafStart {
     Specific(SpecificDiagnosticRafStart),
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum SpecificDiagnosticRafStart {
     #[rasn(tag(0))]
@@ -53,7 +53,7 @@ pub enum SpecificDiagnosticRafStart {
     MissingTimeValue = 4,
 }
 
-#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum RafStartReturnResult {
     #[rasn(tag(0))]
