@@ -1,6 +1,5 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
 
 use log::{info, error};
 use rs_space_sle::raf::provider::RAFProvider;
@@ -100,11 +99,11 @@ async fn run_service_instance(common_config: &CommonConfig, config: RAFProviderC
     info!("Starting SLE instance {} on TCP port {} (SLE Port {})", config.sii, config.port, config.responder_port);
 
     let hdl = tokio::spawn(async move {
-        let notifier = Arc::new(Mutex::new(Notifier::new()));
+        let notifier = Box::new(Notifier::new());
 
-        let mut provider = RAFProvider::new(&config2, &config, notifier);
+        let mut provider = RAFProvider::new(&config2, &config);
 
-        if let Err(err) = provider.run().await {
+        if let Err(err) = provider.run(notifier).await {
             error!("Provider run returned error: {err}");
         }
     });

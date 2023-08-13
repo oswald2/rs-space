@@ -44,14 +44,13 @@ pub enum SleMsg {
 
 type InternalState = Arc<Mutex<InternalRAFProviderState>>;
 
-type Notifier = Arc<Mutex<dyn ProviderNotifier + Send + Sync>>;
+type Notifier = Box<dyn ProviderNotifier + Send>;
 
 pub struct RAFProvider {
     common_config: CommonConfig,
     raf_config: RAFProviderConfig,
     state: InternalState,
     cancel_token: CancellationToken,
-    app_notifier: Notifier,
     chan: Option<Sender<SleMsg>>,
 }
 
@@ -72,19 +71,17 @@ impl RAFProvider {
     pub fn new(
         common_config: &CommonConfig,
         raf_config: &RAFProviderConfig,
-        notifier: Notifier,
     ) -> RAFProvider {
         RAFProvider {
             common_config: common_config.clone(),
             raf_config: raf_config.clone(),
             state: Arc::new(Mutex::new(InternalRAFProviderState::new(common_config))),
             cancel_token: CancellationToken::new(),
-            app_notifier: notifier,
             chan: None,
         }
     }
 
-    pub async fn run(&mut self) -> tokio::io::Result<()> {
+    pub async fn run(&mut self, notifier: Box<dyn ProviderNotifier + Send>) -> tokio::io::Result<()> {
         let listener =
             TcpListener::bind((self.raf_config.hostname.as_ref(), self.raf_config.port)).await?;
 
@@ -115,7 +112,7 @@ impl RAFProvider {
 
         let state2 = self.state.clone();
 
-        let notifier = self.app_notifier.clone();
+        //let notifier = self.app_notifier.clone();
 
         // The server timeout is for waiting for the TML Context message to be received
         let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
@@ -721,8 +718,9 @@ async fn process_bind(
 
     // Now, notify the application that the bind was successful
     {
-        let lock = args.app_notifier.lock().unwrap();
-        lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
+        //let lock = args.app_notifier.lock().unwrap();
+        //lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
+        args.app_notifier.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
     }
 
     Ok(())
@@ -757,8 +755,9 @@ async fn process_unbind(args: &mut Args, reason: &Integer) -> Result<(), String>
 
     // Now, notify the application that the bind was successful
     {
-        let lock = args.app_notifier.lock().unwrap();
-        lock.unbind_succeeded(&args.raf_config.sii, reason);
+        //let lock = args.app_notifier.lock().unwrap();
+        //lock.unbind_succeeded(&args.raf_config.sii, reason);
+        args.app_notifier.unbind_succeeded(&args.raf_config.sii, reason);
     }
 
     Ok(())
@@ -777,8 +776,9 @@ async fn process_peer_abort(
 
     // Now, notify the application that the bind was successful
     {
-        let lock = args.app_notifier.lock().unwrap();
-        lock.peer_abort(&args.raf_config.sii, diagnostic);
+        //let lock = args.app_notifier.lock().unwrap();
+        //lock.peer_abort(&args.raf_config.sii, diagnostic);
+        args.app_notifier.peer_abort(&args.raf_config.sii, diagnostic);
     }
 
     Ok(())
@@ -922,8 +922,9 @@ async fn process_start(
             if let RafStartReturnResult::PositiveResult = diag {
                 // Now, notify the application that the bind was successful
                 {
-                    let lock = args.app_notifier.lock().unwrap();
-                    lock.start_succeeded(&args.raf_config.sii);
+                    //let lock = args.app_notifier.lock().unwrap();
+                    //lock.start_succeeded(&args.raf_config.sii);
+                    args.app_notifier.start_succeeded(&args.raf_config.sii);
                 }
             }
         }
@@ -971,8 +972,9 @@ async fn process_stop(args: &mut Args, invoke_id: u16) -> Result<(), String> {
 
 
     if let SleResult::PositiveResult = diag {
-        let lock = args.app_notifier.lock().unwrap();
-        lock.stop_succeeded(&args.raf_config.sii);
+        //let lock = args.app_notifier.lock().unwrap();
+        //lock.stop_succeeded(&args.raf_config.sii);
+        args.app_notifier.stop_succeeded(&args.raf_config.sii);
     }
 
     Ok(())
