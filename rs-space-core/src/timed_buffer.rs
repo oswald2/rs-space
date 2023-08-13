@@ -1,50 +1,148 @@
+use tokio::{sync::Notify, time::timeout};
 
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration, marker::PhantomData,
+};
 
-use tokio::sync::mpsc::{channel, Sender, Receiver};
-use tokio::time::{sleep, Duration, timeout};
+pub struct TimedBuffer<T> {
+    t: PhantomData<T>
+}
 
-async fn process_buffer(mut receiver: Receiver<i32>, max_capacity: usize, timeout_duration: Duration) {
-    let mut buffer = Vec::with_capacity(max_capacity);
+pub struct Sender<T> {
+    capacity: usize,
+    values: Arc<Mutex<Vec<T>>>,
+    notify_read: Arc<Notify>,
+    notify_write: Arc<Notify>,
+}
 
-    loop {
-        match timeout(timeout_duration, receiver.recv()).await {
-            Ok(Some(value)) => {
-                buffer.push(value);
-                if buffer.len() == max_capacity {
-                    println!("Buffer full, delivering contents: {:?}", buffer);
-                    buffer.clear(); // or send to a consumer
+pub struct Receiver<T> {
+    capacity: usize,
+    timeout: Duration,
+    values: Arc<Mutex<Vec<T>>>,
+    notify_read: Arc<Notify>,
+    notify_write: Arc<Notify>,
+}
+
+impl<T> Sender<T> {
+    pub async fn send(&self, msg: T) {
+        let mut lock = self.values.lock().unwrap();
+        if lock.len() < self.capacity {
+            lock.push(msg);
+            return;
+        } else {
+            drop(lock);
+            self.notify_read.notify_one();
+            self.notify_write.notified().await
+        }
+    }
+}
+
+impl<T> Receiver<T> {
+    pub async fn recv(&self) -> Vec<T> {
+        loop {
+            match timeout(self.timeout, self.notify_read.notified()).await {
+                Err(_) => {
+                    let mut lock = self.values.lock().unwrap();
+                    if lock.is_empty() {
+                        continue;
+                    } else {
+                        let mut res = Vec::with_capacity(self.capacity);
+                        std::mem::swap(&mut *lock, &mut res);
+                        drop(lock);
+
+                        self.notify_write.notify_one();
+                        if res.is_empty() {
+                            continue;
+                        }
+                        return res;
+                    }
                 }
-            }
-            Ok(None) => {
-                println!("Channel closed");
-                break;
-            }
-            Err(_) => {
-                if !buffer.is_empty() {
-                    println!("Timeout reached, delivering contents: {:?}", buffer);
-                    buffer.clear(); // or send to a consumer
+                Ok(()) => {
+                    // we got a signal, return the value
+                    let mut lock = self.values.lock().unwrap();
+                    let mut res = Vec::with_capacity(self.capacity);
+                    std::mem::swap(&mut *lock, &mut res);
+
+                    self.notify_write.notify_one();
+                    return res;
                 }
             }
         }
     }
 }
 
-#[tokio::main]
-async fn main() {
-    let (sender, receiver): (Sender<i32>, Receiver<i32>) = channel(100); // Channel with capacity 100
-    let max_buffer_capacity = 10; // Max buffered items before delivery
-    let buffer_timeout = Duration::from_secs(5); // Timeout duration
+impl<T> TimedBuffer<T> {
+    pub fn new(capacity: usize, timeout: Duration) -> (Sender<T>, Receiver<T>) {
 
-    tokio::spawn(async move {
-        process_buffer(receiver, max_buffer_capacity, buffer_timeout).await;
-    });
+        let vals = Arc::new(Mutex::new(Vec::with_capacity(capacity)));
+        let vals2 = vals.clone();
+        
+        let read_notif = Arc::new(Notify::new());
+        let read_notif2 = read_notif.clone();
 
-    // Simulated producer sending values into buffer
-    for i in 0..200 {
-        if sender.send(i).await.is_err() {
-            println!("Buffer full or receiver dropped");
-            break;
-        }
-        sleep(Duration::from_millis(100)).await; // Just for demonstration
+        let write_notif = Arc::new(Notify::new());
+        let write_notif2 = write_notif.clone();
+
+        let sender = Sender {
+            capacity,
+            values: vals,
+            notify_read: read_notif,
+            notify_write: write_notif
+        };
+
+        let receiver = Receiver {
+            capacity,
+            timeout,
+            values: vals2,
+            notify_read: read_notif2, 
+            notify_write: write_notif2
+        };
+
+        (sender, receiver)
     }
+
+    // pub async fn send(&self, msg: T) {
+    //     let mut lock = self.values.lock().unwrap();
+    //     if lock.len() < self.capacity {
+    //         lock.push(msg);
+    //         return;
+    //     } else {
+    //         drop(lock);
+    //         self.notify_read.notify_one();
+    //         self.notify_write.notified().await
+    //     }
+    // }
+
+    // pub async fn recv(&self) -> Vec<T> {
+    //     loop {
+    //         match timeout(self.timeout, self.notify_read.notified()).await {
+    //             Err(_) => {
+    //                 let mut lock = self.values.lock().unwrap();
+    //                 if lock.is_empty() {
+    //                     continue;
+    //                 } else {
+    //                     let mut res = Vec::with_capacity(self.capacity);
+    //                     std::mem::swap(&mut *lock, &mut res);
+    //                     drop(lock);
+
+    //                     self.notify_write.notify_one();
+    //                     if res.is_empty() {
+    //                         continue;
+    //                     }
+    //                     return res;
+    //                 }
+    //             }
+    //             Ok(()) => {
+    //                 // we got a signal, return the value
+    //                 let mut lock = self.values.lock().unwrap();
+    //                 let mut res = Vec::with_capacity(self.capacity);
+    //                 std::mem::swap(&mut *lock, &mut res);
+
+    //                 self.notify_write.notify_one();
+    //                 return res;
+    //             }
+    //         }
+    //     }
+    // }
 }

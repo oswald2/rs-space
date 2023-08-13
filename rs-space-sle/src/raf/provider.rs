@@ -3,6 +3,9 @@ use std::{
     time::Duration,
 };
 
+use std::sync::atomic::AtomicI32;
+use core::sync::atomic::Ordering;
+
 use log::{debug, error, info, warn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rasn::types::*;
@@ -28,7 +31,10 @@ use crate::{
         sle::*,
     },
 };
-use rs_space_core::time::{Time, TimeEncoding};
+use rs_space_core::{
+    time::{TimeEncoding},
+    timed_buffer::{self, TimedBuffer},
+};
 
 use super::{
     asn1::FrameOrNotification, config::RAFProviderConfig, provider_state::InternalRAFProviderState,
@@ -52,6 +58,7 @@ pub struct RAFProvider {
     state: InternalState,
     cancel_token: CancellationToken,
     chan: Option<Sender<SleMsg>>,
+    buffer_sender: Option<timed_buffer::Sender<SleFrame>>,
 }
 
 struct Args {
@@ -68,20 +75,21 @@ struct Args {
 }
 
 impl RAFProvider {
-    pub fn new(
-        common_config: &CommonConfig,
-        raf_config: &RAFProviderConfig,
-    ) -> RAFProvider {
+    pub fn new(common_config: &CommonConfig, raf_config: &RAFProviderConfig) -> RAFProvider {
         RAFProvider {
             common_config: common_config.clone(),
             raf_config: raf_config.clone(),
             state: Arc::new(Mutex::new(InternalRAFProviderState::new(common_config))),
             cancel_token: CancellationToken::new(),
             chan: None,
+            buffer_sender: None,
         }
     }
 
-    pub async fn run(&mut self, notifier: Box<dyn ProviderNotifier + Send>) -> tokio::io::Result<()> {
+    pub async fn run(
+        &mut self,
+        notifier: Box<dyn ProviderNotifier + Send>,
+    ) -> tokio::io::Result<()> {
         let listener =
             TcpListener::bind((self.raf_config.hostname.as_ref(), self.raf_config.port)).await?;
 
@@ -95,20 +103,33 @@ impl RAFProvider {
         // a mpsc channel to send command messags to the writer task.
         let (sender, mut receiver) = channel::<SleMsg>(QUEUE_SIZE);
         let sender2 = sender.clone();
+        let sender3 = sender.clone();
+
         self.chan = Some(sender);
 
         // We need a writer and a reader task, so we split the socket into a
         // read and write half
         let (rx, tx) = socket.into_split();
 
+        // Create the timed buffer channel
+        let (buf_sender, buf_receiver) = TimedBuffer::<SleFrame>::new(
+            self.raf_config.buffer_size as usize,
+            Duration::from_millis(self.raf_config.latency as u64),
+        );
+        self.buffer_sender = Some(buf_sender);
+
         // some clones to pass on to the two tasks
         let cancel2 = self.cancel_token.clone();
         let cancel3 = self.cancel_token.clone();
+        let cancel4 = self.cancel_token.clone();
 
         let config2 = self.common_config.clone();
         let config3 = self.common_config.clone();
+        let config4 = self.common_config.clone();
+
         let raf_config2 = self.raf_config.clone();
         let raf_config3 = self.raf_config.clone();
+        let raf_config4 = self.raf_config.clone();
 
         let state2 = self.state.clone();
 
@@ -150,6 +171,7 @@ impl RAFProvider {
                     args.interval = interval;
                     args.dead_factor = dead_factor;
 
+                    // Do the actual work. This function loops and processes the incoming PDUs
                     match read_pdus(&mut args).await {
                         Err(err) => {
                             error!("{err}");
@@ -176,6 +198,36 @@ impl RAFProvider {
             }
         });
 
+        // This is the task for the transfer frame buffer. The buffer is expected to be sent 
+        // when it is either full or the latency limit has been reached. This task reads 
+        // from the buffer and sends it 
+        tokio::spawn(async move {
+            let mut rand = SeedableRng::from_entropy();
+            let continuity = AtomicI32::new(-1);
+
+            loop {
+                let frames = buf_receiver.recv().await;
+
+                if !frames.is_empty() {
+                    // prepare the frames
+                    match convert_frames(&config4, &raf_config4, &mut rand, &continuity, frames) {
+                        Err(err) => {
+                            error!("Error encoding TM Frames: {err}");
+                            continue;
+                        }
+                        Ok(trans) => {
+                            let pdu = SleMsg::PDU(SlePdu::SleRafTransferBuffer(trans));
+                            if let Err(err) = sender3.send(pdu).await {
+                                error!("Error sending TM Frames: {err}");
+                                cancel4.cancel();
+                            }
+                        }
+
+                    }
+                }
+            }
+        });
+
         // we only want to return, when the tasks have finished. So we await the handles.
         // Unfortunately, we have no scoped tasks for async.
         let _ = read_handle.await;
@@ -184,7 +236,12 @@ impl RAFProvider {
         Ok(())
     }
 
-    pub async fn send_frame(&mut self) -> tokio::io::Result<()> {
+    /// Send a TM Transfer Frame via an established SLE service
+    pub async fn send_frame(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub async fn send_notification(&mut self) -> Result<(), String> {
         Ok(())
     }
 }
@@ -551,11 +608,7 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
             }
 
             // Now do the processing of the BIND
-            if let Err(err) = process_stop(
-                args, *invoke_id
-            )
-            .await
-            {
+            if let Err(err) = process_stop(args, *invoke_id).await {
                 error!("Error processing STOP: {err}");
             }
         }
@@ -679,10 +732,13 @@ async fn process_bind(
                                 // Ok, BIND is ok, so process the request now
                                 let mut lock = args.state.lock().unwrap();
                                 match lock.process_bind(initiator_identifier, version) {
-                                    Ok(()) => (BindResult::BindOK(version as u16), version), 
+                                    Ok(()) => (BindResult::BindOK(version as u16), version),
                                     Err(err) => {
                                         error!("{err}");
-                                        (BindResult::BindDiag(BindDiagnostic::AlreadyBound), SleVersion::V5)
+                                        (
+                                            BindResult::BindDiag(BindDiagnostic::AlreadyBound),
+                                            SleVersion::V5,
+                                        )
                                     }
                                 }
                             }
@@ -720,7 +776,11 @@ async fn process_bind(
     {
         //let lock = args.app_notifier.lock().unwrap();
         //lock.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
-        args.app_notifier.bind_succeeded(&initiator_identifier.value, &args.raf_config.sii, version);
+        args.app_notifier.bind_succeeded(
+            &initiator_identifier.value,
+            &args.raf_config.sii,
+            version,
+        );
     }
 
     Ok(())
@@ -757,7 +817,8 @@ async fn process_unbind(args: &mut Args, reason: &Integer) -> Result<(), String>
     {
         //let lock = args.app_notifier.lock().unwrap();
         //lock.unbind_succeeded(&args.raf_config.sii, reason);
-        args.app_notifier.unbind_succeeded(&args.raf_config.sii, reason);
+        args.app_notifier
+            .unbind_succeeded(&args.raf_config.sii, reason);
     }
 
     Ok(())
@@ -778,7 +839,8 @@ async fn process_peer_abort(
     {
         //let lock = args.app_notifier.lock().unwrap();
         //lock.peer_abort(&args.raf_config.sii, diagnostic);
-        args.app_notifier.peer_abort(&args.raf_config.sii, diagnostic);
+        args.app_notifier
+            .peer_abort(&args.raf_config.sii, diagnostic);
     }
 
     Ok(())
@@ -899,7 +961,7 @@ async fn process_start(
             let diag = {
                 let mut lock = args.state.lock().unwrap();
                 match lock.process_start(start, stop, frame_qual) {
-                    Ok(()) => RafStartReturnResult::PositiveResult, 
+                    Ok(()) => RafStartReturnResult::PositiveResult,
                     Err(err) => {
                         error!("{err}");
                         RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
@@ -942,19 +1004,17 @@ async fn process_start(
     Ok(())
 }
 
-
 async fn process_stop(args: &mut Args, invoke_id: u16) -> Result<(), String> {
-
     // Ok, BIND is ok, so process the request now
     let diag = {
         {
             let mut lock = args.state.lock().unwrap();
             match lock.process_stop() {
-                Err(err) => { 
+                Err(err) => {
                     error!("{err}");
                     SleResult::NegativeResult(Diagnostics::OtherReason)
                 }
-                Ok(()) => SleResult::PositiveResult
+                Ok(()) => SleResult::PositiveResult,
             }
         }
     };
@@ -969,7 +1029,6 @@ async fn process_stop(args: &mut Args, invoke_id: u16) -> Result<(), String> {
 
     // Send it
     let _ = args.chan.send(SleMsg::PDU(pdu)).await;
-
 
     if let SleResult::PositiveResult = diag {
         //let lock = args.app_notifier.lock().unwrap();
@@ -986,7 +1045,7 @@ fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
         SleAuthType::AuthAll | SleAuthType::AuthBind => {
             let isp1 = ISP1Credentials::new(
                 config.hash_to_use,
-                &Time::now(TimeEncoding::CDS8),
+                &rs_space_core::time::Time::now(TimeEncoding::CDS8),
                 rand.gen(),
                 &config.authority_identifier,
                 &config.password,
@@ -994,4 +1053,30 @@ fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
             Credentials::Used(isp1)
         }
     }
+}
+
+fn convert_frames(config: &CommonConfig, raf_config: &RAFProviderConfig, rand: &mut StdRng, continuity: &AtomicI32, frames: Vec<SleFrame>) -> Result<RafTransferBuffer, String> {
+    // allocate a vector for the output
+    let mut res = RafTransferBuffer::with_capacity(frames.len());
+    
+    // we loop over the frames
+    for frame in frames {
+        // create a new credentials value for the frame 
+        let credentials = new_credentials(config, rand);
+        // convert the ERT into the SLE form
+        let time = to_ccsds_time(&frame.earth_receive_time)?;
+
+        // Add the converted frame to the vector
+        res.push(FrameOrNotification::AnnotatedFrame(RafTransferDataInvocation {
+            invoker_credentials: credentials,
+            earth_receive_time: crate::types::sle::Time::CcsdsFormat(time),
+            antenna_id: raf_config.antenna_id.clone(),
+            data_link_continuity: continuity.load(Ordering::Relaxed),
+            delivered_frame_quality: frame.delivered_frame_quality as i32,
+            private_annotation: PrivateAnnotation::Null,
+            data: frame.data,
+        }));
+    }
+
+    Ok(res)
 }

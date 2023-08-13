@@ -1,4 +1,4 @@
-use crate::raf::config::RAFProviderConfig;
+use crate::raf::config::{RAFProviderConfig, RAFProviderConfigExt};
 use crate::sle::config::{CommonConfig, CommonConfigExt};
 
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use tokio::io::{Error, ErrorKind};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfigExt {
     pub common: CommonConfigExt,
-    pub rafs: Vec<RAFProviderConfig>,
+    pub rafs: Vec<RAFProviderConfigExt>,
 }
 
 #[derive(Debug, Clone)]
@@ -19,11 +19,18 @@ pub struct ProviderConfig {
 }
 
 impl ProviderConfig {
-    pub fn from(conf: ProviderConfigExt) -> Self {
-        ProviderConfig {
-            common: CommonConfig::from(conf.common),
-            rafs: conf.rafs,
+    pub fn from(conf: ProviderConfigExt) -> Result<Self, String> {
+        let mut new_provs = Vec::new();
+        
+        for prov in &conf.rafs {
+            let new_prov = prov.try_into()?;
+            new_provs.push(new_prov);
         }
+      
+        Ok(ProviderConfig {
+            common: CommonConfig::from(conf.common),
+            rafs: new_provs,
+        })
     }
 }
 
@@ -31,14 +38,14 @@ impl Default for ProviderConfigExt {
     fn default() -> Self {
         ProviderConfigExt {
             common: CommonConfigExt::default(),
-            rafs: vec![RAFProviderConfig::default()],
+            rafs: vec![RAFProviderConfigExt::default()],
         }
     }
 }
 
 impl Default for ProviderConfig {
     fn default() -> Self {
-        ProviderConfig::from(ProviderConfigExt::default())
+        ProviderConfig::from(ProviderConfigExt::default()).unwrap()
     }
 }
 
@@ -46,8 +53,13 @@ impl ProviderConfigExt {
     pub async fn read_from_file(filename: &Path) -> Result<ProviderConfig, Error> {
         let content = read_to_string(filename).await?;
 
-        match serde_yaml::from_str(&content) {
-            Ok(cfg) => Ok(ProviderConfig::from(cfg)),
+        match serde_yaml::from_str::<ProviderConfigExt>(&content) {
+            Ok(cfg) => {
+                match ProviderConfig::from(cfg) {
+                    Err(err) => Err(Error::new(ErrorKind::InvalidData, format!("{err}"))),
+                    Ok(cfg) => Ok(cfg)
+                }
+            }
             Err(err) => return Err(Error::new(ErrorKind::Other, format!("{}", err))),
         }
     }

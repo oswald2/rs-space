@@ -1,11 +1,16 @@
+use num_traits::ToPrimitive;
 #[allow(unused)]
 use std::collections::BTreeSet;
-use num_traits::ToPrimitive;
+
+use serde::{Serialize, Deserialize};
 
 use rasn::prelude::*;
 use rasn::{AsnType, Decode, Encode};
 
 use crate::types::sle::{convert_ccsds_time, Credentials, Diagnostics, Time};
+
+use bytes::Bytes;
+
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(enumerated)]
@@ -71,7 +76,33 @@ pub enum AntennaId {
     LocalForm(OctetString),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AntennaIdExt {
+    GlobalForm(Vec<u32>),
+    LocalForm(String),
+}
+
+impl TryFrom<&AntennaIdExt> for AntennaId {
+    type Error = String;
+
+    fn try_from(value: &AntennaIdExt) -> Result<Self, Self::Error> {
+        match value {
+            AntennaIdExt::GlobalForm(vec) => {
+                let vec2 = vec.clone();
+                match ObjectIdentifier::new(vec.clone()) {
+                    None => Err(format!("Illegal AntennaID value (Global Form): {:?}", vec2)),
+                    Some(val) => Ok(AntennaId::GlobalForm(val))
+                }
+            }
+            AntennaIdExt::LocalForm(str) => {
+                Ok(AntennaId::LocalForm(Bytes::copy_from_slice(str.as_ref())))
+            }
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FrameQuality {
     Good = 0,
     Erred = 1,
@@ -154,19 +185,31 @@ pub struct SleTMFrame {
     pub data: SpaceLinkDataUnit,
 }
 
-pub fn convert_frame(frame: &RafTransferDataInvocation) -> Result<SleTMFrame, String> {
-    let t = convert_ccsds_time(&frame.earth_receive_time)?;
-    let fq = FrameQuality::try_from(frame.delivered_frame_quality)?;
+impl TryFrom<&RafTransferDataInvocation> for SleTMFrame {
+    type Error = String;
 
-    Ok(SleTMFrame {
-        earth_receive_time: t,
-        antenna_id: frame.antenna_id.clone(),
-        data_link_continuity: frame.data_link_continuity,
-        delivered_frame_quality: fq,
-        private_annotation: frame.private_annotation.clone(),
-        data: frame.data.clone(),
-    })
+    fn try_from(value: &RafTransferDataInvocation) -> Result<Self, Self::Error> {
+        let t = convert_ccsds_time(&value.earth_receive_time)?;
+        let fq = FrameQuality::try_from(value.delivered_frame_quality)?;
+
+        Ok(SleTMFrame {
+            earth_receive_time: t,
+            antenna_id: value.antenna_id.clone(),
+            data_link_continuity: value.data_link_continuity,
+            delivered_frame_quality: fq,
+            private_annotation: value.private_annotation.clone(),
+            data: value.data.clone(),
+        })
+    }
 }
+
+#[derive(Debug, Clone)]
+pub struct SleFrame {
+    pub earth_receive_time: rs_space_core::time::Time,
+    pub delivered_frame_quality: FrameQuality,
+    pub data: SpaceLinkDataUnit,
+}
+
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]

@@ -26,7 +26,7 @@ pub type SlduStatusNotification = i64;
 #[derive(AsnType, Debug, PartialEq, Encode, Decode)]
 pub struct SpaceLinkDataUnit(Vec<u8>);
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum DeliveryModeEnum {
     RtnTimelyOnline = 0,
     RtnCompleteOnline = 1,

@@ -7,3 +7,4 @@ pub mod pus_sec_hdr;
 pub mod crc;
 pub mod time;
 pub mod edsl;
+pub mod timed_buffer;

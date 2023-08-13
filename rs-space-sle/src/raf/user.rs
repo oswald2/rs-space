@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::asn1::*;
 use crate::raf::asn1::{
-    convert_frame, FrameOrNotification, RafTransferBuffer, RequestedFrameQuality,
+    FrameOrNotification, RafTransferBuffer, RequestedFrameQuality,
 };
 use crate::raf::config::RAFConfig;
 use crate::raf::state::{FrameCallback, InternalRAFState, RAFState};
@@ -800,7 +800,7 @@ fn process_transfer_frame_buffer(state: InternalState, buffer: &RafTransferBuffe
 
     for elem in buffer {
         match elem {
-            FrameOrNotification::AnnotatedFrame(frame) => match convert_frame(frame) {
+            FrameOrNotification::AnnotatedFrame(frame) => match frame.try_into() {
                 Ok(frame) => {
                     lock.process_tm_frame(&frame);
                 }
