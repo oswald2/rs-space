@@ -1,12 +1,14 @@
+use std::sync::{atomic::Ordering, Arc};
+
 use rasn::types::{Utf8String, VisibleString};
 
 use crate::{asn1::*, raf::asn1::*, sle::config::*, types::sle::*};
 
-use super::state::RAFState;
+use super::state::{AtomicRAFState, RAFState};
 
 #[derive(Debug, Clone)]
 pub struct InternalRAFProviderState {
-    state: RAFState,
+    state: Arc<AtomicRAFState>,
     interval: u16,
     dead_factor: u16,
     user: VisibleString,
@@ -17,9 +19,9 @@ pub struct InternalRAFProviderState {
 }
 
 impl InternalRAFProviderState {
-    pub fn new(config: &CommonConfig) -> InternalRAFProviderState {
+    pub fn new(config: &CommonConfig, raf_state: Arc<AtomicRAFState>) -> InternalRAFProviderState {
         InternalRAFProviderState {
-            state: RAFState::Unbound,
+            state: raf_state,
             interval: config.tml.heartbeat,
             dead_factor: config.tml.dead_factor,
             user: VisibleString::new(Utf8String::from("")),
@@ -33,7 +35,7 @@ impl InternalRAFProviderState {
     pub fn reset(&mut self) {
         self.user = VisibleString::new(Utf8String::from(""));
         self.version = SleVersion::V5;
-        self.state = RAFState::Unbound;
+        self.state.store(RAFState::Unbound, Ordering::Relaxed);
     }
 
     pub fn set_heartbeat_values(&mut self, interval: u16, dead_factor: u16) {
@@ -45,19 +47,23 @@ impl InternalRAFProviderState {
         &self.user
     }
 
-    pub fn process_bind(&mut self, initiator: &AuthorityIdentifier, version: SleVersion) -> Result<(), String> {
-        if self.state != RAFState::Unbound {
+    pub fn process_bind(
+        &mut self,
+        initiator: &AuthorityIdentifier,
+        version: SleVersion,
+    ) -> Result<(), String> {
+        if self.state.load(Ordering::Acquire) != RAFState::Unbound {
             Err(format!("RAF BIND while in state {:?}", self.state))
         } else {
             self.user = initiator.clone();
             self.version = version;
-            self.state = RAFState::Bound;
+            self.state.store(RAFState::Bound, Ordering::Relaxed);
             Ok(())
         }
     }
 
     pub fn process_unbind(&mut self, _reason: UnbindReason) -> Result<(), String> {
-        if self.state != RAFState::Bound {
+        if self.state.load(Ordering::Acquire) != RAFState::Bound {
             Err(format!("RAF UNBIND while in state {:?}", self.state))
         } else {
             self.reset();
@@ -75,11 +81,11 @@ impl InternalRAFProviderState {
         stop_time: Option<rs_space_core::time::Time>,
         quality: RequestedFrameQuality,
     ) -> Result<(), String> {
-        if self.state == RAFState::Bound {
+        if self.state.load(Ordering::Acquire) == RAFState::Bound {
             self.requested_quality = quality;
             self.start_time = start_time;
             self.stop_time = stop_time;
-            self.state = RAFState::Active;
+            self.state.store(RAFState::Active, Ordering::Relaxed);
             Ok(())
         } else {
             Err(format!("RAF START while in state {:?}", self.state))
@@ -87,15 +93,13 @@ impl InternalRAFProviderState {
     }
 
     pub fn process_stop(&mut self) -> Result<(), String> {
-        if self.state == RAFState::Active {
-            self.state = RAFState::Bound;
+        if self.state.load(Ordering::Acquire) == RAFState::Active {
+            self.state.store(RAFState::Bound, Ordering::Relaxed);
             self.start_time = None;
             self.stop_time = None;
             Ok(())
-        }
-        else {
+        } else {
             Err(format!("RAF STOP while in state {:?}", self.state))
         }
-
     }
 }

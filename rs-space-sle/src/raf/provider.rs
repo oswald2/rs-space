@@ -3,8 +3,8 @@ use std::{
     time::Duration,
 };
 
-use std::sync::atomic::AtomicI32;
 use core::sync::atomic::Ordering;
+use std::sync::atomic::AtomicI32;
 
 use log::{debug, error, info, warn};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -32,12 +32,15 @@ use crate::{
     },
 };
 use rs_space_core::{
-    time::{TimeEncoding},
+    time::TimeEncoding,
     timed_buffer::{self, TimedBuffer},
 };
 
 use super::{
-    asn1::FrameOrNotification, config::RAFProviderConfig, provider_state::InternalRAFProviderState,
+    asn1::FrameOrNotification,
+    config::RAFProviderConfig,
+    provider_state::InternalRAFProviderState,
+    state::{AtomicRAFState, RAFState},
 };
 
 const QUEUE_SIZE: usize = 500;
@@ -59,6 +62,7 @@ pub struct RAFProvider {
     cancel_token: CancellationToken,
     chan: Option<Sender<SleMsg>>,
     buffer_sender: Option<timed_buffer::Sender<SleFrame>>,
+    raf_state: Arc<AtomicRAFState>,
 }
 
 struct Args {
@@ -76,13 +80,19 @@ struct Args {
 
 impl RAFProvider {
     pub fn new(common_config: &CommonConfig, raf_config: &RAFProviderConfig) -> RAFProvider {
+        let raf_state = Arc::new(AtomicRAFState::new(RAFState::Unbound));
+
         RAFProvider {
             common_config: common_config.clone(),
             raf_config: raf_config.clone(),
-            state: Arc::new(Mutex::new(InternalRAFProviderState::new(common_config))),
+            state: Arc::new(Mutex::new(InternalRAFProviderState::new(
+                common_config,
+                raf_state.clone(),
+            ))),
             cancel_token: CancellationToken::new(),
             chan: None,
             buffer_sender: None,
+            raf_state: raf_state,
         }
     }
 
@@ -198,9 +208,9 @@ impl RAFProvider {
             }
         });
 
-        // This is the task for the transfer frame buffer. The buffer is expected to be sent 
-        // when it is either full or the latency limit has been reached. This task reads 
-        // from the buffer and sends it 
+        // This is the task for the transfer frame buffer. The buffer is expected to be sent
+        // when it is either full or the latency limit has been reached. This task reads
+        // from the buffer and sends it
         tokio::spawn(async move {
             let mut rand = SeedableRng::from_entropy();
             let continuity = AtomicI32::new(-1);
@@ -222,7 +232,6 @@ impl RAFProvider {
                                 cancel4.cancel();
                             }
                         }
-
                     }
                 }
             }
@@ -237,8 +246,24 @@ impl RAFProvider {
     }
 
     /// Send a TM Transfer Frame via an established SLE service
-    pub async fn send_frame(&mut self) -> Result<(), String> {
-        Ok(())
+    pub async fn send_frame(&mut self, frame: SleFrame) -> Result<(), String> {
+        if self.raf_state.load(Ordering::Relaxed) != RAFState::Active {
+            return Err(format!(
+                "Tried to send Frame while not in active state: {}",
+                self.raf_config.sii
+            ));
+        }
+
+        match &self.buffer_sender {
+            Some(chan) => {
+                chan.send(frame).await;
+                Ok(())
+            }
+            None => Err(format!(
+                "Tried to send TM Frame when no channel was established on {}",
+                self.raf_config.sii
+            )),
+        }
     }
 
     pub async fn send_notification(&mut self) -> Result<(), String> {
@@ -1055,27 +1080,35 @@ fn new_credentials(config: &CommonConfig, rand: &mut StdRng) -> Credentials {
     }
 }
 
-fn convert_frames(config: &CommonConfig, raf_config: &RAFProviderConfig, rand: &mut StdRng, continuity: &AtomicI32, frames: Vec<SleFrame>) -> Result<RafTransferBuffer, String> {
+fn convert_frames(
+    config: &CommonConfig,
+    raf_config: &RAFProviderConfig,
+    rand: &mut StdRng,
+    continuity: &AtomicI32,
+    frames: Vec<SleFrame>,
+) -> Result<RafTransferBuffer, String> {
     // allocate a vector for the output
     let mut res = RafTransferBuffer::with_capacity(frames.len());
-    
+
     // we loop over the frames
     for frame in frames {
-        // create a new credentials value for the frame 
+        // create a new credentials value for the frame
         let credentials = new_credentials(config, rand);
         // convert the ERT into the SLE form
         let time = to_ccsds_time(&frame.earth_receive_time)?;
 
         // Add the converted frame to the vector
-        res.push(FrameOrNotification::AnnotatedFrame(RafTransferDataInvocation {
-            invoker_credentials: credentials,
-            earth_receive_time: crate::types::sle::Time::CcsdsFormat(time),
-            antenna_id: raf_config.antenna_id.clone(),
-            data_link_continuity: continuity.load(Ordering::Relaxed),
-            delivered_frame_quality: frame.delivered_frame_quality as i32,
-            private_annotation: PrivateAnnotation::Null,
-            data: frame.data,
-        }));
+        res.push(FrameOrNotification::AnnotatedFrame(
+            RafTransferDataInvocation {
+                invoker_credentials: credentials,
+                earth_receive_time: crate::types::sle::Time::CcsdsFormat(time),
+                antenna_id: raf_config.antenna_id.clone(),
+                data_link_continuity: continuity.load(Ordering::Relaxed),
+                delivered_frame_quality: frame.delivered_frame_quality as i32,
+                private_annotation: PrivateAnnotation::Null,
+                data: frame.data,
+            },
+        ));
     }
 
     Ok(res)

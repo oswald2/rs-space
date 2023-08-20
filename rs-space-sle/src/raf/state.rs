@@ -3,9 +3,11 @@ use log::{error, info, warn};
 use crate::asn1::{BindResult, SleResult};
 use crate::raf::asn1::{RafStartReturnResult, SleTMFrame};
 use crate::types::sle::PeerAbortDiagnostic;
+use atomic_enum::atomic_enum;
 use rasn::types::{Utf8String, VisibleString};
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
+#[atomic_enum]
 pub enum RAFState {
     #[default]
     Unbound,
