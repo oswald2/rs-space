@@ -83,11 +83,11 @@ pub enum RafStartReturnResult {
     NegativeResult(DiagnosticRafStart),
 }
 
-#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
 pub enum RafGetReturnResult {
     #[rasn(tag(0))]
-    PositiveResult,
+    PositiveResult(RafGetParameter),
     #[rasn(tag(1))]
     NegativeResult(DiagnosticRafGet),
 }
@@ -261,8 +261,7 @@ pub type SpaceLinkDataUnit = OctetString;
 
 
 
-#[derive(AsnType, Debug, Copy, Clone, PartialEq, PartialOrd, Encode, Decode)]
-#[rasn(enumerated)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum RafDeliveryMode {
     RtnTimelyOnline,
     RtnCompleteOnline,
@@ -272,7 +271,9 @@ pub enum RafDeliveryMode {
 #[derive(Debug, PartialEq, Clone, AsnType, Decode, Encode)]
 #[rasn(choice)]
 pub enum LatencyLimitValue {
+    #[rasn(tag(Context, 0))]
     Online(IntPosShort),
+    #[rasn(tag(Context, 1))]
     Offline,
 }
 
@@ -298,42 +299,42 @@ type TimeoutPeriod = Integer;
 pub enum RafGetParameter {
     #[rasn(tag(Context, 0))]
     ParBufferSize {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: IntPosShort,
     },
     #[rasn(tag(Context, 1))]
     ParDeliveryMode {
-        parameter_name: Integer,
-        parameter_value: RafDeliveryMode,
+        parameter_name: i64,
+        parameter_value: i64,
     },
     #[rasn(tag(Context, 2))]
     ParLatencyLimit {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: LatencyLimitValue,
     },
     #[rasn(tag(Context, 7))]
     ParMinReportingCycle {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: IntPosShort,
     },
     #[rasn(tag(Context, 6))]
     ParPermittedFrameQuality {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: PermittedFrameQualitySet,
     },
     #[rasn(tag(Context, 3))]
     ParReportingCycle {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: CurrentReportingCycle,
     },
     #[rasn(tag(Context, 4))]
     ParReqFrameQuality {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: RequestedFrameQuality,
     },
     #[rasn(tag(Context, 5))]
     ParReturnTimeout {
-        parameter_name: Integer,
+        parameter_name: i64,
         parameter_value: TimeoutPeriod,
     },
 }

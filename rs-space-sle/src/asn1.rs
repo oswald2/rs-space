@@ -210,6 +210,7 @@ pub enum SlePdu {
         invoke_id: InvokeId,
         raf_parameter: ParameterName,
     },
+    #[rasn(tag(context, 7))]
     SleRafGetParameterReturn {
         performer_credentials: Credentials,
         invoke_id: InvokeId,
@@ -283,13 +284,6 @@ impl SlePdu {
         }
     }
 }
-
-// #[derive(AsnType, Debug, Clone, PartialEq)]
-// pub struct RafGetParameterInvocation {
-//     pub invoker_credentials: Credentials,
-//     pub invoke_id: InvokeId,
-//     pub raf_parameter: RafParameterName,
-// }
 
 #[derive(AsnType, Debug, Copy, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]

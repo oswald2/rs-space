@@ -2,9 +2,11 @@ use std::sync::{atomic::Ordering, Arc};
 
 use rasn::types::{Utf8String, VisibleString};
 
-use crate::{asn1::*, raf::asn1::*, sle::config::*, types::sle::*};
-
 use super::state::{AtomicRAFState, RAFState};
+use crate::types::sle::ParameterName;
+use crate::{asn1::*, raf::asn1::*, sle::config::*, types::sle::*};
+use crate::raf::config::RAFProviderConfig;
+
 
 #[derive(Clone)]
 pub struct InternalRAFProviderState {
@@ -16,10 +18,13 @@ pub struct InternalRAFProviderState {
     start_time: Option<rs_space_core::time::Time>,
     stop_time: Option<rs_space_core::time::Time>,
     requested_quality: RequestedFrameQuality,
+    buffer_size: u16,
+    latency_limit: u16,
+    delivery_mode: RafDeliveryMode,
 }
 
 impl InternalRAFProviderState {
-    pub fn new(config: &CommonConfig, raf_state: Arc<AtomicRAFState>) -> InternalRAFProviderState {
+    pub fn new(config: &CommonConfig, raf_config: &RAFProviderConfig, raf_state: Arc<AtomicRAFState>) -> InternalRAFProviderState {
         InternalRAFProviderState {
             state: raf_state,
             interval: config.tml.heartbeat,
@@ -29,6 +34,9 @@ impl InternalRAFProviderState {
             start_time: None,
             stop_time: None,
             requested_quality: RequestedFrameQuality::AllFrames,
+            buffer_size: raf_config.buffer_size,
+            latency_limit: 600,
+            delivery_mode: raf_config.mode,
         }
     }
 
@@ -104,6 +112,32 @@ impl InternalRAFProviderState {
             Ok(())
         } else {
             Err(format!("RAF STOP while in state {:?}", self.state))
+        }
+    }
+
+    pub fn process_get_param(&self, param_name: ParameterName) -> RafGetReturnResult {
+        match param_name {
+            ParameterName::BufferSize => {
+                RafGetReturnResult::PositiveResult(RafGetParameter::ParBufferSize {
+                    parameter_name: ParameterName::BufferSize as i64,
+                    parameter_value: self.buffer_size,
+                })
+            }
+            ParameterName::LatencyLimit => {
+                RafGetReturnResult::PositiveResult(RafGetParameter::ParLatencyLimit {
+                    parameter_name: ParameterName::LatencyLimit as i64,
+                    parameter_value: LatencyLimitValue::Online(self.latency_limit),
+                })
+            }
+            ParameterName::DeliveryMode => {
+                RafGetReturnResult::PositiveResult(RafGetParameter::ParDeliveryMode {
+                    parameter_name: ParameterName::DeliveryMode as i64,
+                    parameter_value: self.delivery_mode as i64,
+                })
+            }
+            _ => RafGetReturnResult::NegativeResult(DiagnosticRafGet::Specific(
+                SpecificDiagnosticRafGet::UnknownParameter,
+            )),
         }
     }
 }

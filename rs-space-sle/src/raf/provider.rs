@@ -102,6 +102,7 @@ impl RAFProvider {
             raf_config: raf_config.clone(),
             state: Arc::new(Mutex::new(InternalRAFProviderState::new(
                 common_config,
+                raf_config,
                 raf_state.clone(),
             ))),
             cancel_token: CancellationToken::new(),
@@ -713,6 +714,33 @@ async fn process_sle_pdu(args: &mut Args, pdu: &SlePdu) {
                 error!("Error processing STOP: {err}");
             }
         }
+        SlePdu::SleRafGetParameterIncovation {
+            invoker_credentials: _,
+            invoke_id,
+            raf_parameter,
+        } => {
+            // check authentication
+            if !check_authentication(&args.common_config, args.state.clone(), &pdu) {
+                error!("RAF GET PARAMETER PDU failed authentication");
+
+                let credentials = new_credentials(&args.common_config, &mut args.rand);
+
+                // send back a negative acknowledge
+                let ret = SlePdu::SleAcknowledgement {
+                    credentials: credentials,
+                    invoke_id: *invoke_id,
+                    result: SleResult::NegativeResult(Diagnostics::OtherReason),
+                };
+
+                let _ = args.chan.send(SleMsg::PDU(ret)).await;
+                return;
+            }
+
+            // Now do the processing of the BIND
+            if let Err(err) = process_get_parameter(args, *invoke_id, *raf_parameter).await {
+                error!("Error processing GET PARAMETER: {err}");
+            }
+        }
         pdu => {
             info!("Not yet implemented: processing for PDU: {:?}", pdu);
         }
@@ -964,7 +992,7 @@ async fn process_start(
     let (diag, frame_qual, start, stop) = match frame_qual {
         Ok(frame_qual) => {
             // check the start time, must be present in OFFLINE mode
-            if args.raf_config.mode == DeliveryModeEnum::RtnOffline && start_time.is_null() {
+            if args.raf_config.mode == RafDeliveryMode::RtnOffline && start_time.is_null() {
                 (
                     RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
                         SpecificDiagnosticRafStart::MissingTimeValue,
@@ -975,7 +1003,7 @@ async fn process_start(
                 )
             }
             // also check that stop time is present in OFFLINE mode
-            else if args.raf_config.mode == DeliveryModeEnum::RtnOffline && stop_time.is_null() {
+            else if args.raf_config.mode == RafDeliveryMode::RtnOffline && stop_time.is_null() {
                 (
                     RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
                         SpecificDiagnosticRafStart::MissingTimeValue,
@@ -1213,4 +1241,36 @@ fn convert_frames(
     }
 
     Ok(res)
+}
+
+async fn process_get_parameter(
+    args: &mut Args,
+    invoke_id: u16,
+    parameter_name: i64,
+) -> Result<(), String> {
+    // Ok, BIND is ok, so process the request now
+    let diag = match crate::types::sle::ParameterName::try_from(parameter_name) {
+        Err(_err) => RafGetReturnResult::NegativeResult(DiagnosticRafGet::Specific(
+            SpecificDiagnosticRafGet::UnknownParameter,
+        )),
+        Ok(param) => {
+            let lock = args.state.lock().unwrap();
+            lock.process_get_param(param)
+        }
+    };
+
+    // Create a SLE Ack PDU
+    let credentials = new_credentials(&args.common_config, &mut args.rand);
+    
+    let pdu = SlePdu::SleRafGetParameterReturn {
+        performer_credentials: credentials,
+        invoke_id: invoke_id,
+        result: diag,
+    };
+    debug!("Get Parameter received: returning: {:?}", pdu);
+
+    // Send it
+    let _ = args.chan.send(SleMsg::PDU(pdu)).await;
+
+    Ok(())
 }

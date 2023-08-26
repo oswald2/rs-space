@@ -1,6 +1,9 @@
 use bytes::Bytes;
 use rasn::{ber::de::Error, types::Utf8String, types::VisibleString};
 use rs_space_core::pus_types::HexBytes;
+use rs_space_sle::raf::asn1::RafGetParameter;
+use rs_space_sle::raf::asn1::RafGetReturnResult;
+use rs_space_sle::raf::asn1::RafDeliveryMode;
 use rs_space_sle::{
     asn1::*,
     sle::config::HashToUse,
@@ -8,8 +11,8 @@ use rs_space_sle::{
         aul::{HashInput, ISP1Credentials},
         sle::{
             new_service_instance_attribute, null_ccsds_time, service_instance_identifier_to_string,
-            string_to_service_instance_id, ConditionalTime, Credentials, Time, RAF,
-            RSL_FG, SAGR, SPACK,
+            string_to_service_instance_id, ConditionalTime, Credentials, Time, RAF, RSL_FG, SAGR,
+            SPACK,
         },
     },
 };
@@ -157,9 +160,42 @@ fn time_test() {
     println!("empty conditional time: {:?}", HexBytes(enc_t2));
 }
 
+fn raf_get_parameter_test() {
+    let pdu = SlePdu::SleRafGetParameterReturn {
+        performer_credentials: Credentials::Unused,
+        invoke_id: 2,
+        result: RafGetReturnResult::PositiveResult(RafGetParameter::ParBufferSize {
+            parameter_name: 5.into(),
+            parameter_value: 100,
+        }),
+    };
+
+    let enc_return_buffer_size = rasn::der::encode(&pdu).unwrap();
+    println!(
+        "encoded return buffer size: {}",
+        HexBytes(enc_return_buffer_size)
+    );
+    println!("                 should be: a70f8000020102a008a006020104020164");
+
+    let pdu = SlePdu::SleRafGetParameterReturn {
+        performer_credentials: Credentials::Unused,
+        invoke_id: 2,
+        result: RafGetReturnResult::PositiveResult(RafGetParameter::ParDeliveryMode {
+            parameter_name: 9,
+            parameter_value: RafDeliveryMode::RtnCompleteOnline as i64,
+        }),
+    };
+
+    let enc_return_delivery_mode = rasn::der::encode(&pdu).unwrap();
+    println!("encoded return delivery mode: {}", HexBytes(enc_return_delivery_mode));
+    println!("                   should be: a70f8000020102a008a106020106020101");
+}
+
 fn main() {
     bind_enc_test();
     isp1_test();
 
     time_test();
+
+    raf_get_parameter_test();
 }

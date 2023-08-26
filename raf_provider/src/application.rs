@@ -120,35 +120,35 @@ async fn run_service_instance(common_config: &CommonConfig, config: RAFProviderC
     let _ = provider.wait_active().await;
     info!("Provider is ACTIVE!");
 
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    // tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    info!("Provider sending Notification for sync loss...");
-    if let Err(err) = provider
-        .notify_sync_loss(
-            &rs_space_core::time::Time::now(TimeEncoding::CDS8),
-            LockStatus::OutOfLock,
-            LockStatus::OutOfLock,
-            LockStatus::OutOfLock,
-        )
-        .await
-    {
-        error!("Error sending notification: {}", err);
-        return;
-    }
+    // info!("Provider sending Notification for sync loss...");
+    // if let Err(err) = provider
+    //     .notify_sync_loss(
+    //         &rs_space_core::time::Time::now(TimeEncoding::CDS8),
+    //         LockStatus::OutOfLock,
+    //         LockStatus::OutOfLock,
+    //         LockStatus::OutOfLock,
+    //     )
+    //     .await
+    // {
+    //     error!("Error sending notification: {}", err);
+    //     return;
+    // }
 
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    // tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    let frame = SleFrame {
-        earth_receive_time: rs_space_core::time::Time::now(TimeEncoding::CDS8),
-        delivered_frame_quality: FrameQuality::Good,
-        data: Bytes::copy_from_slice(&[0x01, 0x02, 0x03, 0x04]),
-    };
+    // let frame = SleFrame {
+    //     earth_receive_time: rs_space_core::time::Time::now(TimeEncoding::CDS8),
+    //     delivered_frame_quality: FrameQuality::Good,
+    //     data: Bytes::copy_from_slice(&[0x01, 0x02, 0x03, 0x04]),
+    // };
 
-    info!("Provider sending frame...");
-    if let Err(err) = provider.send_frame(frame).await {
-        error!("Error sending frame: {}", err);
-        return;
-    }
+    // info!("Provider sending frame...");
+    // if let Err(err) = provider.send_frame(frame).await {
+    //     error!("Error sending frame: {}", err);
+    //     return;
+    // }
 
     provider.wait_for_termination().await;
 }
