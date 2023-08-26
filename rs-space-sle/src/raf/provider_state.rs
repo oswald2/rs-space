@@ -6,7 +6,7 @@ use crate::{asn1::*, raf::asn1::*, sle::config::*, types::sle::*};
 
 use super::state::{AtomicRAFState, RAFState};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct InternalRAFProviderState {
     state: Arc<AtomicRAFState>,
     interval: u16,
@@ -45,6 +45,10 @@ impl InternalRAFProviderState {
 
     pub fn user(&self) -> &VisibleString {
         &self.user
+    }
+
+    pub fn state(&self) -> RAFState {
+        self.state.load(Ordering::Relaxed)
     }
 
     pub fn process_bind(

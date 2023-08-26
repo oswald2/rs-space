@@ -9,6 +9,7 @@ pub struct TimedBuffer<T> {
     t: PhantomData<T>
 }
 
+#[derive(Clone)]
 pub struct Sender<T> {
     capacity: usize,
     values: Arc<Mutex<Vec<T>>>,

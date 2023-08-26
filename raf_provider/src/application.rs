@@ -1,15 +1,19 @@
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use log::{info, error};
+use log::{error, info};
+use rs_space_core::time::TimeEncoding;
+use rs_space_sle::asn1::UnbindReason;
+use rs_space_sle::raf::asn1::{FrameQuality, SleFrame};
 use rs_space_sle::raf::provider::RAFProvider;
 use rs_space_sle::sle::config::CommonConfig;
 use rs_space_sle::{
-    provider::{raf_interface::ProviderNotifier, config::ProviderConfig},
+    provider::{config::ProviderConfig, raf_interface::ProviderNotifier},
     raf::config::RAFProviderConfig,
-    types::sle::{SleVersion, PeerAbortDiagnostic},
+    types::sle::{PeerAbortDiagnostic, SleVersion},
 };
-use rs_space_sle::asn1::UnbindReason;
+
+use bytes::Bytes;
 
 //use rs_space_sle::{asn1::UnbindReason, raf::client::RAFClient};
 use tokio::io::Error;
@@ -95,17 +99,38 @@ pub async fn run_app(config: &ProviderConfig) -> Result<(), Error> {
 
 async fn run_service_instance(common_config: &CommonConfig, config: RAFProviderConfig) {
     let config2 = common_config.clone();
-    
-    info!("Starting SLE instance {} on TCP port {} (SLE Port {})", config.sii, config.port, config.responder_port);
 
-    let hdl = tokio::spawn(async move {
-        let notifier = Box::new(Notifier::new());
+    info!(
+        "Starting SLE instance {} on TCP port {} (SLE Port {})",
+        config.sii, config.port, config.responder_port
+    );
 
-        let mut provider = RAFProvider::new(&config2, &config);
+    info!("Creating new provider...");
+    let mut provider = RAFProvider::new(&config2, &config);
+    //let provider2 = provider.clone();
 
-        if let Err(err) = provider.run(notifier).await {
-            error!("Provider run returned error: {err}");
-        }
-    });
-    let _ = hdl.await;
+    let notifier = Box::new(Notifier::new());
+
+
+    info!("Running provider...");
+    if let Err(err) = provider.run(notifier).await {
+        error!("Provider run returned error: {err}");
+    }
+
+    info!("Waiting until provider is ACTIVE...");
+    let _ = provider.wait_active().await;
+    info!("Provider is ACTIVE!");
+
+    let frame = SleFrame {
+        earth_receive_time: rs_space_core::time::Time::now(TimeEncoding::CDS8),
+        delivered_frame_quality: FrameQuality::Good,
+        data: Bytes::copy_from_slice(&[0x01, 0x02, 0x03, 0x04]),
+    };
+
+    if let Err(err) = provider.send_frame(frame).await {
+        error!("Error sending frame: {}", err);
+        return;
+    }
+
+    provider.wait_for_termination().await;
 }

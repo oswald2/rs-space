@@ -1,5 +1,8 @@
 use std::{
+    future::Future,
+    pin::Pin,
     sync::{Arc, Mutex},
+    task::{Context, Poll},
     time::Duration,
 };
 
@@ -16,7 +19,11 @@ use tokio::{
         TcpListener,
     },
     select,
-    sync::mpsc::{channel, Receiver, Sender},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        watch,
+    },
+    task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -60,9 +67,13 @@ pub struct RAFProvider {
     raf_config: RAFProviderConfig,
     state: InternalState,
     cancel_token: CancellationToken,
+    raf_state: Arc<AtomicRAFState>,
+    state_watch: tokio::sync::watch::Receiver<RAFState>,
+    state_watch_snd: Option<tokio::sync::watch::Sender<RAFState>>,
     chan: Option<Sender<SleMsg>>,
     buffer_sender: Option<timed_buffer::Sender<SleFrame>>,
-    raf_state: Arc<AtomicRAFState>,
+    read_handle: Option<JoinHandle<()>>,
+    write_handle: Option<JoinHandle<()>>,
 }
 
 struct Args {
@@ -76,11 +87,13 @@ struct Args {
     rx: OwnedReadHalf,
     interval: u16,
     dead_factor: u16,
+    state_watch: tokio::sync::watch::Sender<RAFState>,
 }
 
 impl RAFProvider {
     pub fn new(common_config: &CommonConfig, raf_config: &RAFProviderConfig) -> RAFProvider {
         let raf_state = Arc::new(AtomicRAFState::new(RAFState::Unbound));
+        let (state_tx, state_rx) = watch::channel(RAFState::Unbound);
 
         RAFProvider {
             common_config: common_config.clone(),
@@ -90,9 +103,13 @@ impl RAFProvider {
                 raf_state.clone(),
             ))),
             cancel_token: CancellationToken::new(),
+            raf_state: raf_state,
+            state_watch: state_rx,
+            state_watch_snd: Some(state_tx),
             chan: None,
             buffer_sender: None,
-            raf_state: raf_state,
+            read_handle: None,
+            write_handle: None,
         }
     }
 
@@ -115,8 +132,6 @@ impl RAFProvider {
         let sender2 = sender.clone();
         let sender3 = sender.clone();
 
-        self.chan = Some(sender);
-
         // We need a writer and a reader task, so we split the socket into a
         // read and write half
         let (rx, tx) = socket.into_split();
@@ -126,6 +141,8 @@ impl RAFProvider {
             self.raf_config.buffer_size as usize,
             Duration::from_millis(self.raf_config.latency as u64),
         );
+
+        self.chan = Some(sender);
         self.buffer_sender = Some(buf_sender);
 
         // some clones to pass on to the two tasks
@@ -148,6 +165,10 @@ impl RAFProvider {
         // The server timeout is for waiting for the TML Context message to be received
         let server_timeout = Duration::from_secs(self.raf_config.server_init_time as u64);
 
+        // Remove the watch sender from the provider and move it into
+        // the reader thread, so that it can notify the provider
+        let state_watch = self.state_watch_snd.take().unwrap();
+
         // The first task. This task reads from the socket, parses the SLE PDUs,
         // authenticates them (if configured) and passes them on forwards to the
         // application. Also, PDUs for the state machine are processed, forwarded
@@ -169,6 +190,7 @@ impl RAFProvider {
                 rx,
                 interval,
                 dead_factor,
+                state_watch,
             };
 
             // First, we expect a TML context message. If not, we bail out
@@ -237,16 +259,25 @@ impl RAFProvider {
             }
         });
 
-        // we only want to return, when the tasks have finished. So we await the handles.
-        // Unfortunately, we have no scoped tasks for async.
-        let _ = read_handle.await;
-        let _ = write_handle.await;
+        self.read_handle = Some(read_handle);
+        self.write_handle = Some(write_handle);
 
         Ok(())
     }
 
+    pub async fn wait_for_termination(&mut self) {
+        // we only want to return, when the tasks have finished. So we await the handles.
+        // Unfortunately, we have no scoped tasks for async.
+        if let Some(hdl) = self.read_handle.take() {
+            let _ = hdl.await;
+        }
+        if let Some(hdl) = self.write_handle.take() {
+            let _ = hdl.await;
+        }
+    }
+
     /// Send a TM Transfer Frame via an established SLE service
-    pub async fn send_frame(&mut self, frame: SleFrame) -> Result<(), String> {
+    pub async fn send_frame(&self, frame: SleFrame) -> Result<(), String> {
         if self.raf_state.load(Ordering::Relaxed) != RAFState::Active {
             return Err(format!(
                 "Tried to send Frame while not in active state: {}",
@@ -266,8 +297,32 @@ impl RAFProvider {
         }
     }
 
-    pub async fn send_notification(&mut self) -> Result<(), String> {
+    pub async fn send_notification(&self) -> Result<(), String> {
         Ok(())
+    }
+
+    pub async fn wait_active(&mut self) -> bool {
+        self.state_watch
+            .wait_for(|val| *val == RAFState::Active)
+            .await
+            .is_ok()
+    }
+}
+
+pub struct WaitActive {
+    raf_state: Arc<AtomicRAFState>,
+}
+
+impl Future for WaitActive {
+    type Output = RAFState;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<RAFState> {
+        if self.raf_state.load(Ordering::Acquire) == RAFState::Active {
+            Poll::Ready(RAFState::Active)
+        } else {
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
     }
 }
 
@@ -757,7 +812,10 @@ async fn process_bind(
                                 // Ok, BIND is ok, so process the request now
                                 let mut lock = args.state.lock().unwrap();
                                 match lock.process_bind(initiator_identifier, version) {
-                                    Ok(()) => (BindResult::BindOK(version as u16), version),
+                                    Ok(()) => {
+                                        let _ = args.state_watch.send(lock.state());
+                                        (BindResult::BindOK(version as u16), version)
+                                    }
                                     Err(err) => {
                                         error!("{err}");
                                         (
@@ -826,6 +884,7 @@ async fn process_unbind(args: &mut Args, reason: &Integer) -> Result<(), String>
     {
         let mut lock = args.state.lock().unwrap();
         let _ = lock.process_unbind(reason);
+        let _ = args.state_watch.send(lock.state());
     }
 
     // Create a unbind return PDU
@@ -986,7 +1045,10 @@ async fn process_start(
             let diag = {
                 let mut lock = args.state.lock().unwrap();
                 match lock.process_start(start, stop, frame_qual) {
-                    Ok(()) => RafStartReturnResult::PositiveResult,
+                    Ok(()) => {
+                        let _ = args.state_watch.send(lock.state());
+                        RafStartReturnResult::PositiveResult
+                    }
                     Err(err) => {
                         error!("{err}");
                         RafStartReturnResult::NegativeResult(DiagnosticRafStart::Specific(
@@ -1039,7 +1101,10 @@ async fn process_stop(args: &mut Args, invoke_id: u16) -> Result<(), String> {
                     error!("{err}");
                     SleResult::NegativeResult(Diagnostics::OtherReason)
                 }
-                Ok(()) => SleResult::PositiveResult,
+                Ok(()) => {
+                    let _ = args.state_watch.send(lock.state());
+                    SleResult::PositiveResult
+                }
             }
         }
     };
