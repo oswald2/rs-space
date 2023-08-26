@@ -1,8 +1,5 @@
 use std::{
-    future::Future,
-    pin::Pin,
     sync::{Arc, Mutex},
-    task::{Context, Poll},
     time::Duration,
 };
 
@@ -319,13 +316,15 @@ impl RAFProvider {
         match &self.buffer_sender {
             Some(chan) => {
                 let time = crate::types::sle::Time::CcsdsFormat(to_ccsds_time(time)?);
-                chan.send(
-                DataBufferElement::Notification(Notification::LossFrameSync {
-                    time: time,
-                    carrier_lock_status: (carrier_lock_status as i32).into(),
-                    subcarrier_lock_status: (subcarrier_lock_status as i32).into(),
-                    symbol_sync_lock_status: (symbol_sync_lock_status as i32).into(),
-                })).await;
+                chan.send(DataBufferElement::Notification(
+                    Notification::LossFrameSync {
+                        time: time,
+                        carrier_lock_status: (carrier_lock_status as i32).into(),
+                        subcarrier_lock_status: (subcarrier_lock_status as i32).into(),
+                        symbol_sync_lock_status: (symbol_sync_lock_status as i32).into(),
+                    },
+                ))
+                .await;
 
                 Ok(())
             }
@@ -342,22 +341,9 @@ impl RAFProvider {
             .await
             .is_ok()
     }
-}
 
-pub struct WaitActive {
-    raf_state: Arc<AtomicRAFState>,
-}
-
-impl Future for WaitActive {
-    type Output = RAFState;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<RAFState> {
-        if self.raf_state.load(Ordering::Acquire) == RAFState::Active {
-            Poll::Ready(RAFState::Active)
-        } else {
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
+    pub async fn stop(&self) {
+        self.cancel_token.cancel();
     }
 }
 

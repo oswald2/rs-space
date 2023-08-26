@@ -8,9 +8,8 @@ use crate::types::sle::{
     ConditionalTime, Credentials, Diagnostics, PeerAbortDiagnostic, ServiceInstanceIdentifier,
 };
 
-use crate::raf::asn1::{RafStartReturnResult, RafTransferBuffer};
+use crate::raf::asn1::{RafStartReturnResult, RafTransferBuffer, RafGetReturnResult};
 use serde::{Deserialize, Serialize};
-
 
 pub type DeliveryMode = i64;
 pub type Duration = IntUnsignedLong;
@@ -49,8 +48,6 @@ impl TryFrom<i64> for DeliveryModeEnum {
         }
     }
 }
-
-
 
 // ASN1 bind types
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
@@ -207,6 +204,17 @@ pub enum SlePdu {
     },
     #[rasn(tag(context, 8))]
     SleRafTransferBuffer(RafTransferBuffer),
+    #[rasn(tag(context, 6))]
+    SleRafGetParameterIncovation {
+        invoker_credentials: Credentials,
+        invoke_id: InvokeId,
+        raf_parameter: ParameterName,
+    },
+    SleRafGetParameterReturn {
+        performer_credentials: Credentials,
+        invoke_id: InvokeId,
+        result: RafGetReturnResult,
+    }
 }
 
 impl SlePdu {
@@ -243,6 +251,11 @@ impl SlePdu {
             } => Some(&invoker_credentials),
             SlePdu::SleAcknowledgement { credentials, .. } => Some(&credentials),
             SlePdu::SleRafTransferBuffer { .. } => None,
+            SlePdu::SleRafGetParameterIncovation {
+                invoker_credentials,
+                ..
+            } => Some(&invoker_credentials),
+            SlePdu::SleRafGetParameterReturn { performer_credentials, .. } => Some(&performer_credentials),
         }
     }
 
@@ -258,6 +271,8 @@ impl SlePdu {
             SlePdu::SleRafStopInvocation { .. } => "RAF STOP",
             SlePdu::SleAcknowledgement { .. } => "RAF STOP RETURN",
             SlePdu::SleRafTransferBuffer { .. } => "RAF TRANSFER BUFFER",
+            SlePdu::SleRafGetParameterIncovation { .. } => "RAF GET PARAMETER",
+            SlePdu::SleRafGetParameterReturn { .. } => "RAF GET PARAMETER RETURN",
         }
     }
 

@@ -8,10 +8,11 @@ use rasn::prelude::*;
 use rasn::{AsnType, Decode, Encode};
 
 use crate::types::sle::{convert_ccsds_time, Credentials, Diagnostics, Time};
+use crate::asn1::IntPosShort;
 
 use bytes::Bytes;
 
-#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[rasn(enumerated)]
 pub enum RequestedFrameQuality {
     GoodFramesOnly = 0,
@@ -44,6 +45,15 @@ pub enum DiagnosticRafStart {
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(choice)]
+pub enum DiagnosticRafGet {
+    #[rasn(tag(0))]
+    Common(Diagnostics),
+    #[rasn(tag(1))]
+    Specific(SpecificDiagnosticRafGet),
+}
+
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[rasn(choice)]
 pub enum SpecificDiagnosticRafStart {
     #[rasn(tag(0))]
     OutOfService = 0,
@@ -59,12 +69,29 @@ pub enum SpecificDiagnosticRafStart {
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(choice)]
+pub enum SpecificDiagnosticRafGet {
+    #[rasn(tag(0))]
+    UnknownParameter = 0,
+}
+
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[rasn(choice)]
 pub enum RafStartReturnResult {
     #[rasn(tag(0))]
     PositiveResult,
     #[rasn(tag(1))]
     NegativeResult(DiagnosticRafStart),
 }
+
+#[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
+#[rasn(choice)]
+pub enum RafGetReturnResult {
+    #[rasn(tag(0))]
+    PositiveResult,
+    #[rasn(tag(1))]
+    NegativeResult(DiagnosticRafGet),
+}
+
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]
@@ -231,3 +258,82 @@ pub struct RafSyncNotifyInvocation {
 pub type RafTransferBuffer = Vec<FrameOrNotification>;
 
 pub type SpaceLinkDataUnit = OctetString;
+
+
+
+#[derive(AsnType, Debug, Copy, Clone, PartialEq, PartialOrd, Encode, Decode)]
+#[rasn(enumerated)]
+pub enum RafDeliveryMode {
+    RtnTimelyOnline,
+    RtnCompleteOnline,
+    RtnOffline,
+}
+
+#[derive(Debug, PartialEq, Clone, AsnType, Decode, Encode)]
+#[rasn(choice)]
+pub enum LatencyLimitValue {
+    Online(IntPosShort),
+    Offline,
+}
+
+#[derive(Debug, PartialEq, Clone, rasn::AsnType, Decode, Encode)]
+pub struct PermittedFrameQualitySet(SetOf<RequestedFrameQuality>);
+
+type ReportingCycle = Integer;
+
+
+// CurrentReportingCycle definition
+#[derive(Debug, PartialEq, Clone, rasn::AsnType, rasn::Decode, rasn::Encode)]
+#[rasn(choice)]
+pub enum CurrentReportingCycle {
+    PeriodicReportingOff,        // Corresponds to the NULL value
+    PeriodicReportingOn(ReportingCycle),
+}
+
+
+type TimeoutPeriod = Integer; 
+
+#[derive(Debug, PartialEq, Clone, AsnType, Decode, Encode)]
+#[rasn(choice)]
+pub enum RafGetParameter {
+    #[rasn(tag(Context, 0))]
+    ParBufferSize {
+        parameter_name: Integer,
+        parameter_value: IntPosShort,
+    },
+    #[rasn(tag(Context, 1))]
+    ParDeliveryMode {
+        parameter_name: Integer,
+        parameter_value: RafDeliveryMode,
+    },
+    #[rasn(tag(Context, 2))]
+    ParLatencyLimit {
+        parameter_name: Integer,
+        parameter_value: LatencyLimitValue,
+    },
+    #[rasn(tag(Context, 7))]
+    ParMinReportingCycle {
+        parameter_name: Integer,
+        parameter_value: IntPosShort,
+    },
+    #[rasn(tag(Context, 6))]
+    ParPermittedFrameQuality {
+        parameter_name: Integer,
+        parameter_value: PermittedFrameQualitySet,
+    },
+    #[rasn(tag(Context, 3))]
+    ParReportingCycle {
+        parameter_name: Integer,
+        parameter_value: CurrentReportingCycle,
+    },
+    #[rasn(tag(Context, 4))]
+    ParReqFrameQuality {
+        parameter_name: Integer,
+        parameter_value: RequestedFrameQuality,
+    },
+    #[rasn(tag(Context, 5))]
+    ParReturnTimeout {
+        parameter_name: Integer,
+        parameter_value: TimeoutPeriod,
+    },
+}
