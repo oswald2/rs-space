@@ -2,7 +2,7 @@ use num_traits::ToPrimitive;
 #[allow(unused)]
 use std::collections::BTreeSet;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rasn::prelude::*;
 use rasn::{AsnType, Decode, Encode};
@@ -10,7 +10,6 @@ use rasn::{AsnType, Decode, Encode};
 use crate::types::sle::{convert_ccsds_time, Credentials, Diagnostics, Time};
 
 use bytes::Bytes;
-
 
 #[derive(AsnType, Debug, Clone, Copy, PartialEq, Encode, Decode)]
 #[rasn(enumerated)]
@@ -91,7 +90,7 @@ impl TryFrom<&AntennaIdExt> for AntennaId {
                 let vec2 = vec.clone();
                 match ObjectIdentifier::new(vec.clone()) {
                     None => Err(format!("Illegal AntennaID value (Global Form): {:?}", vec2)),
-                    Some(val) => Ok(AntennaId::GlobalForm(val))
+                    Some(val) => Ok(AntennaId::GlobalForm(val)),
                 }
             }
             AntennaIdExt::LocalForm(str) => {
@@ -100,7 +99,6 @@ impl TryFrom<&AntennaIdExt> for AntennaId {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FrameQuality {
@@ -130,9 +128,9 @@ pub enum LockStatus {
     Unknown = 3,
 }
 
-pub type FrameSyncLockStatus = LockStatus;
-pub type CarrierLockStatus = LockStatus;
-pub type SymbolLockStatus = LockStatus;
+pub type FrameSyncLockStatus = Integer;
+pub type CarrierLockStatus = Integer;
+pub type SymbolLockStatus = Integer;
 
 #[derive(AsnType, Debug, Clone, PartialEq)]
 pub struct LockStatusReport {
@@ -146,7 +144,12 @@ pub struct LockStatusReport {
 #[rasn(choice)]
 pub enum Notification {
     #[rasn(tag(0))]
-    LossFrameSync(Integer),
+    LossFrameSync {
+        time: Time,
+        carrier_lock_status: CarrierLockStatus,
+        subcarrier_lock_status: Integer,
+        symbol_sync_lock_status: SymbolLockStatus,
+    },
     #[rasn(tag(1))]
     ProductionStatusChange(Integer),
     #[rasn(tag(2))]
@@ -209,7 +212,6 @@ pub struct SleFrame {
     pub delivered_frame_quality: FrameQuality,
     pub data: SpaceLinkDataUnit,
 }
-
 
 #[derive(AsnType, Debug, Clone, PartialEq, Encode, Decode)]
 #[rasn(choice)]

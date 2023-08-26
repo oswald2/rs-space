@@ -39,7 +39,7 @@ use crate::{
     },
 };
 use rs_space_core::{
-    time::TimeEncoding,
+    time::{Time, TimeEncoding},
     timed_buffer::{self, TimedBuffer},
 };
 
@@ -62,6 +62,11 @@ type InternalState = Arc<Mutex<InternalRAFProviderState>>;
 
 type Notifier = Box<dyn ProviderNotifier + Send>;
 
+pub enum DataBufferElement {
+    Frame(SleFrame),
+    Notification(Notification),
+}
+
 pub struct RAFProvider {
     common_config: CommonConfig,
     raf_config: RAFProviderConfig,
@@ -71,7 +76,7 @@ pub struct RAFProvider {
     state_watch: tokio::sync::watch::Receiver<RAFState>,
     state_watch_snd: Option<tokio::sync::watch::Sender<RAFState>>,
     chan: Option<Sender<SleMsg>>,
-    buffer_sender: Option<timed_buffer::Sender<SleFrame>>,
+    buffer_sender: Option<timed_buffer::Sender<DataBufferElement>>,
     read_handle: Option<JoinHandle<()>>,
     write_handle: Option<JoinHandle<()>>,
 }
@@ -137,7 +142,7 @@ impl RAFProvider {
         let (rx, tx) = socket.into_split();
 
         // Create the timed buffer channel
-        let (buf_sender, buf_receiver) = TimedBuffer::<SleFrame>::new(
+        let (buf_sender, buf_receiver) = TimedBuffer::<DataBufferElement>::new(
             self.raf_config.buffer_size as usize,
             Duration::from_millis(self.raf_config.latency as u64),
         );
@@ -287,7 +292,7 @@ impl RAFProvider {
 
         match &self.buffer_sender {
             Some(chan) => {
-                chan.send(frame).await;
+                chan.send(DataBufferElement::Frame(frame)).await;
                 Ok(())
             }
             None => Err(format!(
@@ -297,8 +302,38 @@ impl RAFProvider {
         }
     }
 
-    pub async fn send_notification(&self) -> Result<(), String> {
-        Ok(())
+    pub async fn notify_sync_loss(
+        &self,
+        time: &Time,
+        carrier_lock_status: LockStatus,
+        subcarrier_lock_status: LockStatus,
+        symbol_sync_lock_status: LockStatus,
+    ) -> Result<(), String> {
+        if self.raf_state.load(Ordering::Relaxed) != RAFState::Active {
+            return Err(format!(
+                "Tried to send Notification while not in active state: {}",
+                self.raf_config.sii
+            ));
+        }
+
+        match &self.buffer_sender {
+            Some(chan) => {
+                let time = crate::types::sle::Time::CcsdsFormat(to_ccsds_time(time)?);
+                chan.send(
+                DataBufferElement::Notification(Notification::LossFrameSync {
+                    time: time,
+                    carrier_lock_status: (carrier_lock_status as i32).into(),
+                    subcarrier_lock_status: (subcarrier_lock_status as i32).into(),
+                    symbol_sync_lock_status: (symbol_sync_lock_status as i32).into(),
+                })).await;
+
+                Ok(())
+            }
+            None => Err(format!(
+                "Tried to send TM Frame when no channel was established on {}",
+                self.raf_config.sii
+            )),
+        }
     }
 
     pub async fn wait_active(&mut self) -> bool {
@@ -1150,30 +1185,45 @@ fn convert_frames(
     raf_config: &RAFProviderConfig,
     rand: &mut StdRng,
     continuity: &AtomicI32,
-    frames: Vec<SleFrame>,
+    frames: Vec<DataBufferElement>,
 ) -> Result<RafTransferBuffer, String> {
     // allocate a vector for the output
     let mut res = RafTransferBuffer::with_capacity(frames.len());
 
     // we loop over the frames
-    for frame in frames {
-        // create a new credentials value for the frame
-        let credentials = new_credentials(config, rand);
-        // convert the ERT into the SLE form
-        let time = to_ccsds_time(&frame.earth_receive_time)?;
+    for elem in frames {
+        match elem {
+            DataBufferElement::Frame(frame) => {
+                // create a new credentials value for the frame
+                let credentials = new_credentials(config, rand);
+                // convert the ERT into the SLE form
+                let time = to_ccsds_time(&frame.earth_receive_time)?;
 
-        // Add the converted frame to the vector
-        res.push(FrameOrNotification::AnnotatedFrame(
-            RafTransferDataInvocation {
-                invoker_credentials: credentials,
-                earth_receive_time: crate::types::sle::Time::CcsdsFormat(time),
-                antenna_id: raf_config.antenna_id.clone(),
-                data_link_continuity: continuity.load(Ordering::Relaxed),
-                delivered_frame_quality: frame.delivered_frame_quality as i32,
-                private_annotation: PrivateAnnotation::Null,
-                data: frame.data,
-            },
-        ));
+                // Add the converted frame to the vector
+                res.push(FrameOrNotification::AnnotatedFrame(
+                    RafTransferDataInvocation {
+                        invoker_credentials: credentials,
+                        earth_receive_time: crate::types::sle::Time::CcsdsFormat(time),
+                        antenna_id: raf_config.antenna_id.clone(),
+                        data_link_continuity: continuity.load(Ordering::Relaxed),
+                        delivered_frame_quality: frame.delivered_frame_quality as i32,
+                        private_annotation: PrivateAnnotation::Null,
+                        data: frame.data,
+                    },
+                ));
+            }
+            DataBufferElement::Notification(notif) => {
+                // create a new credentials value for the frame
+                let credentials = new_credentials(config, rand);
+
+                res.push(FrameOrNotification::SyncNotification(
+                    RafSyncNotifyInvocation {
+                        invoker_credentials: credentials,
+                        notification: notif,
+                    },
+                ));
+            }
+        }
     }
 
     Ok(res)
